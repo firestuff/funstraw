@@ -20,7 +20,7 @@ class Iterator(object):
     self.offset += offset_incr
 
   def Extract(self, length):
-    assert self.offset + length <= len(self.data)
+    assert self.offset + length <= len(self.data), 'Want %d bytes, have %d' % (length, len(self.data) - self.offset)
     ret = self.data[self.offset:self.offset + length]
     self.Advance(length)
     return ret
@@ -107,6 +107,7 @@ class Attribute(object):
     nlattr = self._nlattr.Unpack(iterator)
     if targetlen is not None:
       assert nlattr['len'] == targetlen
+    value = iterator.data[iterator.offset:iterator.offset + nlattr['len'] - self._nlattr.size]
     name, sub_parser = self._attributes.get(nlattr['type'], (None, None))
     assert sub_parser, 'Unknown attribute type %d, len %d' % (nlattr['type'], nlattr['len'])
     sub_len = nlattr['len'] - self._nlattr.size
@@ -143,8 +144,24 @@ class Attributes(object):
 
   def Pack(self, accumulator, **attrs):
     for name, value in attrs.iteritems():
-      print 'name %s, value %s' % (name, value)
       self._attribute.Pack(accumulator, self._attribute_idx[name], value)
+
+
+class Array(object):
+  _arrayhdr = StructParser('HH', ('len', 'index'))
+
+  def __init__(self, child):
+    super(Array, self).__init__()
+    self._child = child
+
+  def Unpack(self, iterator, targetlen=None):
+    if targetlen is not None:
+      iterator = Iterator(iterator.Extract(targetlen))
+    ret = []
+    while not iterator.AtEnd():
+      hdr = self._arrayhdr.Unpack(iterator)
+      ret.append(self._child.Unpack(iterator, hdr['len'] - self._arrayhdr.size))
+    return ret
 
 
 flag = EmptyParser()
@@ -198,6 +215,27 @@ nl80211_attr = Attributes({
   46: ('generation', u32),
 })
 
+
+op_attr = Attributes({
+  1: ('id', u32),
+  2: ('flags', u32),
+})
+
+mcast_grp_attr = Attributes({
+  1: ('name', string),
+  2: ('id', u32),
+})
+
+ctrl_attr = Attributes({
+  1: ('family_id', u16),
+  2: ('family_name', string),
+  3: ('version', u32),
+  4: ('hdrsize', u32),
+  5: ('maxattr', u32),
+  6: ('ops', Array(op_attr)),
+  7: ('mcast_groups', Array(mcast_grp_attr)),
+})
+
 F_REQUEST = 1 << 0
 F_MULTI = 1 << 1
 F_ACK = 1 << 2
@@ -241,10 +279,21 @@ genquery.Append(str(int_genquery))
 
 sock = socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM, 16)
 sock.bind((0, 0))
-sock.send(str(genquery))
-data = sock.recv(4096)
 
+#sock.send(str(genquery))
+#data = sock.recv(4096)
+#
+#iterator = Iterator(data)
+#print 'nlmsghdr: %s' % nlmsghdr.Unpack(iterator)
+#print 'genlmsghdr: %s' % genlmsghdr.Unpack(iterator)
+#print 'nl80211_attr: %s' % nl80211_attr.Unpack(iterator)
+
+query = '\24\0\0\0\20\0\5\3a\6\256T\v\17\0\0\3\1\0\0'
+sock.send(query)
+data = sock.recv(4096)
 iterator = Iterator(data)
-print 'nlmsghdr: %s' % nlmsghdr.Unpack(iterator)
-print 'genlmsghdr: %s' % genlmsghdr.Unpack(iterator)
-print 'nl80211_attr: %s' % nl80211_attr.Unpack(iterator)
+myhdr = nlmsghdr.Unpack(iterator)
+print 'nlmsghdr: %s' % myhdr
+int_iterator = Iterator(iterator.Extract(myhdr['length'] - nlmsghdr.size))
+print 'genlmsghdr: %s' % genlmsghdr.Unpack(int_iterator)
+print 'ctrl_attr: %s' % ctrl_attr.Unpack(int_iterator)
