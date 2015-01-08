@@ -1,6 +1,5 @@
 #!/usr/bin/python2.7
 
-import collections
 import os
 import random
 import socket
@@ -67,7 +66,7 @@ class StructParser(struct.Struct):
       assert self.size == targetlen, 'Actual bytes: %d, expected bytes: %d' % (targetlen, self.size)
     values = self.unpack_from(iterator.data, iterator.offset)
     iterator.Advance(self.size)
-    return collections.OrderedDict(zip(self._fields, values))
+    return dict(zip(self._fields, values))
 
   def Pack(self, accumulator, **values):
     ordered_values = []
@@ -120,10 +119,10 @@ class Attribute(object):
 
     return ret
 
-  def Pack(self, accumulator, attrtype, **attrargs):
+  def Pack(self, accumulator, attrtype, value):
     sub_parser = self._attributes[attrtype][1]
     sub_accumulator = Accumulator()
-    sub_parser.Pack(sub_accumulator, **attrargs)
+    sub_parser.Pack(sub_accumulator, value)
     self._nlattr.Pack(accumulator, len=self._nlattr.size + len(sub_accumulator), type=attrtype)
     accumulator.Append(str(sub_accumulator))
 
@@ -131,18 +130,21 @@ class Attribute(object):
 class Attributes(object):
   def __init__(self, attributes):
     super(Attributes, self).__init__()
+    self._attribute_idx = dict((v[0], k) for k, v in attributes.iteritems())
     self._attribute = Attribute(attributes)
 
   def Unpack(self, iterator, targetlen=None):
     if targetlen is not None:
       iterator = Iterator(iterator.Extract(targetlen))
-    ret = collections.OrderedDict()
+    ret = {}
     while not iterator.AtEnd():
       ret.update(self._attribute.Unpack(iterator))
     return ret
 
-  def Pack(self, accumulator, attrtype, **attrargs):
-    return self._attribute.Pack(accumulator, attrtype, **attrargs)
+  def Pack(self, accumulator, **attrs):
+    for name, value in attrs.iteritems():
+      print 'name %s, value %s' % (name, value)
+      self._attribute.Pack(accumulator, self._attribute_idx[name], value)
 
 
 flag = EmptyParser()
@@ -217,29 +219,28 @@ STA_FLAG_AUTHENTICATED = 1 << 4
 STA_FLAG_TDLS_PEER = 1 << 5
 STA_FLAG_ASSOCIATED = 1 << 6
 
-ATTR_IFINDEX = 3
 
-
-genquery = Accumulator()
-nlmsghdr.Pack(
-  genquery, 
-  length=28, # XXX
-  type=20, # XXX
-  flags=F_REQUEST | F_ACK | F_DUMP,
-  seq=random.randint(0, 2 ** 32 - 1),
-  pid=os.getpid())
+int_genquery = Accumulator()
 genlmsghdr.Pack(
-  genquery,
+  int_genquery,
   cmd=CMD_GET_STATION,
   version=0,
   reserved=0)
 nl80211_attr.Pack(
-  genquery,
-  attrtype=ATTR_IFINDEX,
-  value=6)
+  int_genquery,
+  ifindex=6)
+genquery = Accumulator()
+nlmsghdr.Pack(
+  genquery, 
+  length=nlmsghdr.size + len(int_genquery),
+  type=20, # XXX
+  flags=F_REQUEST | F_ACK | F_DUMP,
+  seq=random.randint(0, 2 ** 32 - 1),
+  pid=os.getpid())
+genquery.Append(str(int_genquery))
 
 sock = socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM, 16)
-sock.bind((0,0))
+sock.bind((0, 0))
 sock.send(str(genquery))
 data = sock.recv(4096)
 
