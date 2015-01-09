@@ -98,10 +98,6 @@ class EmptyParser(object):
     pass
 
 
-nlmsghdr = StructParser('LHHLL', ('length', 'type', 'flags', 'seq', 'pid'))
-genlmsghdr = StructParser('BBH', ('cmd', 'version', 'reserved'))
-
-
 class Attribute(object):
   _nlattr = StructParser('HH', ('len', 'type'))
 
@@ -265,7 +261,9 @@ STA_FLAG_TDLS_PEER = 1 << 5
 STA_FLAG_ASSOCIATED = 1 << 6
 
 
-class Connection(object):
+class Netlink(object):
+  _nlmsghdr = StructParser('LHHLL', ('length', 'type', 'flags', 'seq', 'pid'))
+
   def __init__(self):
     self._sock = socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM, 16)
     self._sock.bind((0, 0))
@@ -273,18 +271,37 @@ class Connection(object):
   def Send(self, msg):
     self._sock.send(msg)
 
-  def RecvAndUnpack(self):
-    ret = []
+  def Recv(self):
     while True:
       data = self._sock.recv(4096)
       iterator = Iterator(data)
       while not iterator.AtEnd():
-        myhdr = nlmsghdr.Unpack(iterator)
+        myhdr = self._nlmsghdr.Unpack(iterator)
         if myhdr['type'] == NLMSG_DONE:
-          return ret
-        ret.append(iterator.ExtractIterator(myhdr['length'] - nlmsghdr.size))
+          return
+        yield (myhdr['type'], iterator.ExtractIterator(myhdr['length'] - self._nlmsghdr.size))
         if not myhdr['flags'] & NLMSG_F_MULTI:
-          return ret
+          return
+
+
+class GenericNetlink(object):
+  _genlmsghdr = StructParser('BBH', ('cmd', 'version', 'reserved'))
+
+  _parser = {
+    0x10: ctrl_attr,
+  }
+
+  def __init__(self):
+    self._netlink = Netlink()
+
+  def Send(self, msg):
+    self._netlink.Send(msg)
+
+  def Recv(self):
+    for msgtype, iterator in self._netlink.Recv():
+      genlhdr = self._genlmsghdr.Unpack(iterator)
+      parser = self._parser[msgtype]
+      yield (genlhdr['cmd'], parser.Unpack(iterator))
 
 
 #int_genquery = Accumulator()
@@ -306,15 +323,7 @@ class Connection(object):
 #  pid=os.getpid())
 #genquery.Append(str(int_genquery))
 
-#sock.send(str(genquery))
-#data = sock.recv(4096)
-
-#iterator = Iterator(data)
-#print 'nlmsghdr: %s' % nlmsghdr.Unpack(iterator)
-#print 'genlmsghdr: %s' % genlmsghdr.Unpack(iterator)
-#print 'nl80211_attr: %s' % nl80211_attr.Unpack(iterator)
-
 query = '\24\0\0\0\20\0\5\3a\6\256T\v\17\0\0\3\1\0\0'
-conn = Connection()
+conn = GenericNetlink()
 conn.Send(query)
-print ['%s\n' % s for s in conn.RecvAndUnpack()]
+print ['%s\n' % s for cmd, s in conn.Recv()]
