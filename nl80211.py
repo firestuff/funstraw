@@ -241,16 +241,18 @@ ctrl_attr = Attributes({
   7: ('mcast_groups', Array(mcast_grp_attr)),
 })
 
-F_REQUEST = 1 << 0
-F_MULTI = 1 << 1
-F_ACK = 1 << 2
-F_ECHO = 1 << 3
-F_DUMP_INTR = 1 << 4
+NLMSG_F_REQUEST = 1 << 0
+NLMSG_F_MULTI = 1 << 1
+NLMSG_F_ACK = 1 << 2
+NLMSG_F_ECHO = 1 << 3
+NLMSG_F_DUMP_INTR = 1 << 4
 
-F_ROOT = 1 << 8
-F_MATCH = 1 << 9
-F_ATOMIC = 1 << 10
-F_DUMP = F_ROOT | F_MATCH
+NLMSG_F_ROOT = 1 << 8
+NLMSG_F_MATCH = 1 << 9
+NLMSG_F_ATOMIC = 1 << 10
+NLMSG_F_DUMP = NLMSG_F_ROOT | NLMSG_F_MATCH
+
+NLMSG_DONE = 3
 
 CMD_GET_STATION = 17
 
@@ -272,13 +274,17 @@ class Connection(object):
     self._sock.send(msg)
 
   def RecvAndUnpack(self):
-    data = self._sock.recv(4096)
-    iterator = Iterator(data)
-    myhdr = nlmsghdr.Unpack(iterator)
-    print 'nlmsghdr: %s' % myhdr
-    int_iterator = iterator.ExtractIterator(myhdr['length'] - nlmsghdr.size)
-    print 'genlmsghdr: %s' % genlmsghdr.Unpack(int_iterator)
-    print 'ctrl_attr: %s' % ctrl_attr.Unpack(int_iterator)
+    ret = []
+    while True:
+      data = self._sock.recv(4096)
+      iterator = Iterator(data)
+      while not iterator.AtEnd():
+        myhdr = nlmsghdr.Unpack(iterator)
+        if myhdr['type'] == NLMSG_DONE:
+          return ret
+        ret.append(iterator.ExtractIterator(myhdr['length'] - nlmsghdr.size))
+        if not myhdr['flags'] & NLMSG_F_MULTI:
+          return ret
 
 
 #int_genquery = Accumulator()
@@ -311,4 +317,4 @@ class Connection(object):
 query = '\24\0\0\0\20\0\5\3a\6\256T\v\17\0\0\3\1\0\0'
 conn = Connection()
 conn.Send(query)
-conn.RecvAndUnpack()
+print ['%s\n' % s for s in conn.RecvAndUnpack()]
