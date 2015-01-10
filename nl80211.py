@@ -127,8 +127,13 @@ class Attribute(object):
     sub_parser = self._attributes[attrtype][1]
     sub_accumulator = Accumulator()
     sub_parser.Pack(sub_accumulator, value)
-    self._nlattr.Pack(accumulator, len=self._nlattr.size + len(sub_accumulator), type=attrtype)
+    attrlen = self._nlattr.size + len(sub_accumulator)
+    self._nlattr.Pack(accumulator, len=attrlen, type=attrtype)
     accumulator.Append(str(sub_accumulator))
+
+    padding = ((attrlen + 4 - 1) & ~3) - attrlen
+    if padding:
+      accumulator.Append('\0' * padding)
 
 
 class Attributes(object):
