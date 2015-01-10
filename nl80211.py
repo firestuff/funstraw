@@ -186,10 +186,12 @@ class Netlink(object):
   _NLMSG_F_ECHO = 0x08
   _NLMSG_F_DUMP_INTR = 0x10
 
-  NLMSG_F_ROOT = 0x100
-  NLMSG_F_MATCH = 0x200
-  NLMSG_F_ATOMIC = 0x400
-  NLMSG_F_DUMP = NLMSG_F_ROOT | NLMSG_F_MATCH
+  flags = {
+    'root': 0x100,
+    'match': 0x200,
+    'atomic': 0x400,
+    'dump': 0x100 | 0x200,
+  }
 
   _NLMSG_DONE = 3
 
@@ -200,13 +202,15 @@ class Netlink(object):
     self._sock.bind((0, 0))
 
   def Send(self, msgtype, flags, msg):
-    flags |= self._NLMSG_F_REQUEST
+    flagint = self._NLMSG_F_REQUEST
+    for flag in flags:
+      flagint |= self.flags[flag]
     accumulator = Accumulator()
     self._nlmsghdr.Pack(
       accumulator,
       length=len(msg) + self._nlmsghdr.size,
       type=msgtype,
-      flags=flags,
+      flags=flagint,
       seq=random.randint(0, 2 ** 32 - 1),
       pid=os.getpid())
     accumulator.Append(msg)
@@ -263,7 +267,7 @@ class GenericNetlink(object):
   def __init__(self):
     self._netlink = Netlink()
     self._UpdateMsgTypes()
-    self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, 'getfamily', 1)
+    self.Send('nlctrl', ['dump'], 'getfamily', 1)
     for msg in self.Recv():
       msgtype, attrs = msg
       assert msgtype == self._msgtypes_by_name['nlctrl']['commands']['newfamily'], msgtype
@@ -379,5 +383,5 @@ def GetIfIndex(if_name):
 
 gnl = GenericNetlink()
 RegisterNL80211(gnl)
-gnl.Send('nl80211', Netlink.NLMSG_F_DUMP, 'get_station', 0, ifindex=GetIfIndex('wlan0'))
+gnl.Send('nl80211', ['dump'], 'get_station', 0, ifindex=GetIfIndex('wlan0'))
 print list(gnl.Recv())
