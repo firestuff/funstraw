@@ -1,5 +1,6 @@
 #!/usr/bin/python2.7
 
+import fcntl
 import os
 import random
 import socket
@@ -346,6 +347,14 @@ class NL80211(object):
     return self._gnl.Recv()
 
 
+def GetIfIndex(if_name):
+  SIOCGIFINDEX = 0x8933
+  sockfd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  ifreq = struct.pack('16si', if_name, 0)
+  res = fcntl.ioctl(sockfd, SIOCGIFINDEX, ifreq)
+  return struct.unpack("16si", res)[1]
+
+
 nl = NL80211()
-nl.Send(Netlink.NLMSG_F_DUMP, nl.CMD_GET_STATION, 0, ifindex=10)
+nl.Send(Netlink.NLMSG_F_DUMP, nl.CMD_GET_STATION, 0, ifindex=GetIfIndex('wlan0'))
 print list(nl.Recv())
