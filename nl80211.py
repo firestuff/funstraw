@@ -260,7 +260,7 @@ class GenericNetlink(object):
   def __init__(self):
     self._netlink = Netlink()
     self._UpdateMsgTypes()
-    self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, 'getfamily', 1, '')
+    self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, 'getfamily', 1)
     for msg in self.Recv():
       msgtype, attrs = msg
       assert msgtype == self._commands['newfamily'], msgtype
@@ -278,17 +278,22 @@ class GenericNetlink(object):
   def RegisterMsgType(self, family_name, parser):
     self._msgtypes_by_name[family_name][2] = parser
 
-  def Send(self, msgtype, flags, cmd, version, msg):
-    accumulator = Accumulator()
+  def Send(self, msgtype, flags, cmd, version, **attrs):
     if isinstance(cmd, str):
       cmd = self._commands[cmd]
+    msgtype_id, _, parser = self._msgtypes_by_name[msgtype]
+
+    accumulator = Accumulator()
     self._genlmsghdr.Pack(
       accumulator,
       cmd=cmd,
       version=version,
       reserved=0)
-    accumulator.Append(msg)
-    msgtype_id = self._msgtypes_by_name[msgtype][0]
+
+    parser.Pack(
+      accumulator,
+      **attrs)
+
     self._netlink.Send(msgtype_id, flags, str(accumulator))
 
   def Recv(self):
@@ -359,9 +364,7 @@ class NL80211(object):
     self._gnl.RegisterMsgType('nl80211', self._nl80211_attr)
 
   def Send(self, flags, cmd, version, **attrs):
-    accumulator = Accumulator()
-    self._nl80211_attr.Pack(accumulator, **attrs)
-    self._gnl.Send('nl80211', flags, self._commands[cmd], version, str(accumulator))
+    self._gnl.Send('nl80211', flags, self._commands[cmd], version, **attrs)
 
   def Recv(self):
     return self._gnl.Recv()
