@@ -313,6 +313,10 @@ class GenericNetlink(object):
       parser = self._msgtypes_by_id[msgtype]['parser']
       yield (genlhdr['cmd'], parser.Unpack(iterator))
 
+  def Query(self, msgtype, flags, cmd, version, **attrs):
+    self.Send(msgtype, flags, cmd, version, **attrs)
+    return self.Recv()
+
 
 def RegisterNL80211(gnl):
   rate_info = Attributes({
@@ -383,5 +387,4 @@ def GetIfIndex(if_name):
 
 gnl = GenericNetlink()
 RegisterNL80211(gnl)
-gnl.Send('nl80211', ['dump'], 'get_station', 0, ifindex=GetIfIndex('wlan0'))
-print list(gnl.Recv())
+print list(gnl.Query('nl80211', ['dump'], 'get_station', 0, ifindex=GetIfIndex('wlan0')))
