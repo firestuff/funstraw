@@ -252,19 +252,19 @@ class GenericNetlink(object):
     7: ('mcast_groups', Array(_mcast_grp_attr)),
   })
 
-  _msgtypes = [
-    {
-      'id': 0x10,
-      'name': 'nlctrl',
-      'parser': _ctrl_attr,
-      'commands': {
-        'newfamily': 1,
-        'getfamily': 3,
-      },
-    },
-  ]
-
   def __init__(self):
+    self._msgtypes = [
+      {
+        'id': 0x10,
+        'name': 'nlctrl',
+        'parser': self._ctrl_attr,
+        'commands': {
+          'newfamily': 1,
+          'getfamily': 3,
+        },
+      },
+    ]
+
     self._netlink = Netlink()
     self._UpdateMsgTypes()
     self.Send('nlctrl', ['dump'], 'getfamily', 1)
