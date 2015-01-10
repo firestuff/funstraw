@@ -249,13 +249,16 @@ class GenericNetlink(object):
   })
 
   _msgtypes = [
-    [0x10, 'nlctrl', _ctrl_attr],
+    {
+      'id': 0x10,
+      'name': 'nlctrl',
+      'parser': _ctrl_attr,
+      'commands': {
+        'newfamily': 1,
+        'getfamily': 3,
+      },
+    },
   ]
-
-  _commands = {
-    'newfamily': 1,
-    'getfamily': 3,
-  }
 
   def __init__(self):
     self._netlink = Netlink()
@@ -263,48 +266,52 @@ class GenericNetlink(object):
     self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, 'getfamily', 1)
     for msg in self.Recv():
       msgtype, attrs = msg
-      assert msgtype == self._commands['newfamily'], msgtype
+      assert msgtype == self._msgtypes_by_name['nlctrl']['commands']['newfamily'], msgtype
       family_name = attrs['family_name'].rstrip('\0')
       if family_name in self._msgtypes_by_name:
-        assert attrs['family_id'] == self._msgtypes_by_name[family_name][0], attrs['family_id']
+        assert attrs['family_id'] == self._msgtypes_by_name[family_name]['id'], attrs['family_id']
       else:
-        self._msgtypes.append([attrs['family_id'], family_name, None])
+        self._msgtypes.append({
+          'id': attrs['family_id'],
+          'name': family_name,
+          'parser': None,
+          'commands': None,
+        })
     self._UpdateMsgTypes()
 
   def _UpdateMsgTypes(self):
-    self._msgtypes_by_id = dict((i[0], i) for i in self._msgtypes)
-    self._msgtypes_by_name = dict((i[1], i) for i in self._msgtypes)
+    self._msgtypes_by_id = dict((i['id'], i) for i in self._msgtypes)
+    self._msgtypes_by_name = dict((i['name'], i) for i in self._msgtypes)
 
-  def RegisterMsgType(self, family_name, parser):
-    self._msgtypes_by_name[family_name][2] = parser
+  def RegisterMsgType(self, family_name, parser, commands):
+    self._msgtypes_by_name[family_name]['parser'] = parser
+    self._msgtypes_by_name[family_name]['commands'] = commands
 
   def Send(self, msgtype, flags, cmd, version, **attrs):
-    if isinstance(cmd, str):
-      cmd = self._commands[cmd]
-    msgtype_id, _, parser = self._msgtypes_by_name[msgtype]
+    msgtype = self._msgtypes_by_name[msgtype]
 
     accumulator = Accumulator()
     self._genlmsghdr.Pack(
       accumulator,
-      cmd=cmd,
+      cmd=msgtype['commands'][cmd],
       version=version,
       reserved=0)
 
-    parser.Pack(
+    msgtype['parser'].Pack(
       accumulator,
       **attrs)
 
-    self._netlink.Send(msgtype_id, flags, str(accumulator))
+    self._netlink.Send(msgtype['id'], flags, str(accumulator))
 
   def Recv(self):
     for msgtype, iterator in self._netlink.Recv():
       genlhdr = self._genlmsghdr.Unpack(iterator)
-      parser = self._msgtypes_by_id[msgtype][2]
+      parser = self._msgtypes_by_id[msgtype]['parser']
       yield (genlhdr['cmd'], parser.Unpack(iterator))
 
 
-class NL80211(object):
-  _rate_info = Attributes({
+def RegisterNL80211(gnl):
+  rate_info = Attributes({
     1: ('bitrate', u16),
     2: ('mcs', u8),
     4: ('short_gi', flag),
@@ -313,26 +320,26 @@ class NL80211(object):
     10: ('160_mhz_width', u32),
   })
 
-  _bss_param = Attributes({
+  bss_param = Attributes({
     2: ('short_preamble', flag),
     3: ('short_slot_time', flag),
     4: ('dtim_period', u8),
     5: ('beacon_interval', u16),
   })
 
-  _sta_info = Attributes({
+  sta_info = Attributes({
     1: ('inactive_time', u32),
     2: ('rx_bytes', u32),
     3: ('tx_bytes', u32),
     7: ('signal', u8),
-    8: ('tx_bitrate', _rate_info),
+    8: ('tx_bitrate', rate_info),
     9: ('rx_packets', u32),
     10: ('tx_packets', u32),
     11: ('tx_retries', u32),
     12: ('tx_failed', u32),
     13: ('signal_avg', u8),
-    14: ('rx_bitrate', _rate_info),
-    15: ('bss_param', _bss_param),
+    14: ('rx_bitrate', rate_info),
+    15: ('bss_param', bss_param),
     16: ('connected_time', u32),
     17: ('sta_flags', StructParser('LL', ('mask', 'values'))),
     18: ('beacon_loss', u32),
@@ -340,34 +347,26 @@ class NL80211(object):
     24: ('tx_bytes_64', u64),
   })
 
-  _nl80211_attr = Attributes({
+  nl80211_attr = Attributes({
     3: ('ifindex', u32),
     6: ('mac', string),
-    21: ('sta_info', _sta_info),
+    21: ('sta_info', sta_info),
     46: ('generation', u32),
   })
 
-  _commands = {
+  commands = {
     'get_station': 17,
   }
 
-  STA_FLAG_AUTHORIZED = 1 << 0
-  STA_FLAG_SHORT_PREAMBLE = 1 << 1
-  STA_FLAG_WME = 1 << 2
-  STA_FLAG_MFP = 1 << 3
-  STA_FLAG_AUTHENTICATED = 1 << 4
-  STA_FLAG_TDLS_PEER = 1 << 5
-  STA_FLAG_ASSOCIATED = 1 << 6
+  # STA_FLAG_AUTHORIZED = 1 << 0
+  # STA_FLAG_SHORT_PREAMBLE = 1 << 1
+  # STA_FLAG_WME = 1 << 2
+  # STA_FLAG_MFP = 1 << 3
+  # STA_FLAG_AUTHENTICATED = 1 << 4
+  # STA_FLAG_TDLS_PEER = 1 << 5
+  # STA_FLAG_ASSOCIATED = 1 << 6
 
-  def __init__(self):
-    self._gnl = GenericNetlink()
-    self._gnl.RegisterMsgType('nl80211', self._nl80211_attr)
-
-  def Send(self, flags, cmd, version, **attrs):
-    self._gnl.Send('nl80211', flags, self._commands[cmd], version, **attrs)
-
-  def Recv(self):
-    return self._gnl.Recv()
+  gnl.RegisterMsgType('nl80211', nl80211_attr, commands)
 
 
 def GetIfIndex(if_name):
@@ -378,6 +377,7 @@ def GetIfIndex(if_name):
   return struct.unpack("16si", res)[1]
 
 
-nl = NL80211()
-nl.Send(Netlink.NLMSG_F_DUMP, 'get_station', 0, ifindex=GetIfIndex('wlan0'))
-print list(nl.Recv())
+gnl = GenericNetlink()
+RegisterNL80211(gnl)
+gnl.Send('nl80211', Netlink.NLMSG_F_DUMP, 'get_station', 0, ifindex=GetIfIndex('wlan0'))
+print list(gnl.Recv())
