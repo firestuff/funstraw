@@ -252,16 +252,18 @@ class GenericNetlink(object):
     [0x10, 'nlctrl', _ctrl_attr],
   ]
 
-  CTRL_CMD_NEWFAMILY = 0x01
-  CTRL_CMD_GETFAMILY = 0x03
+  _commands = {
+    'newfamily': 1,
+    'getfamily': 3,
+  }
 
   def __init__(self):
     self._netlink = Netlink()
     self._UpdateMsgTypes()
-    self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, self.CTRL_CMD_GETFAMILY, 1, '')
+    self.Send('nlctrl', self._netlink.NLMSG_F_DUMP, 'getfamily', 1, '')
     for msg in self.Recv():
       msgtype, attrs = msg
-      assert msgtype == self.CTRL_CMD_NEWFAMILY, msgtype
+      assert msgtype == self._commands['newfamily'], msgtype
       family_name = attrs['family_name'].rstrip('\0')
       if family_name in self._msgtypes_by_name:
         assert attrs['family_id'] == self._msgtypes_by_name[family_name][0], attrs['family_id']
@@ -278,6 +280,8 @@ class GenericNetlink(object):
 
   def Send(self, msgtype, flags, cmd, version, msg):
     accumulator = Accumulator()
+    if isinstance(cmd, str):
+      cmd = self._commands[cmd]
     self._genlmsghdr.Pack(
       accumulator,
       cmd=cmd,
@@ -338,7 +342,9 @@ class NL80211(object):
     46: ('generation', u32),
   })
 
-  CMD_GET_STATION = 17
+  _commands = {
+    'get_station': 17,
+  }
 
   STA_FLAG_AUTHORIZED = 1 << 0
   STA_FLAG_SHORT_PREAMBLE = 1 << 1
@@ -355,7 +361,7 @@ class NL80211(object):
   def Send(self, flags, cmd, version, **attrs):
     accumulator = Accumulator()
     self._nl80211_attr.Pack(accumulator, **attrs)
-    self._gnl.Send('nl80211', flags, cmd, version, str(accumulator))
+    self._gnl.Send('nl80211', flags, self._commands[cmd], version, str(accumulator))
 
   def Recv(self):
     return self._gnl.Recv()
@@ -370,5 +376,5 @@ def GetIfIndex(if_name):
 
 
 nl = NL80211()
-nl.Send(Netlink.NLMSG_F_DUMP, nl.CMD_GET_STATION, 0, ifindex=GetIfIndex('wlan0'))
+nl.Send(Netlink.NLMSG_F_DUMP, 'get_station', 0, ifindex=GetIfIndex('wlan0'))
 print list(nl.Recv())
