@@ -384,13 +384,46 @@ def RegisterNL80211(gnl):
   })
 
   nl80211_attr = Attributes({
+    1: ('wiphy', u32),
+    2: ('wiphy_name', string),
     3: ('ifindex', u32),
     6: ('mac', string),
     21: ('sta_info', sta_info),
+    22: ('wiphy_bands', string), # XXX
+    32: ('supported_iftypes', string), # XXX
+    43: ('max_num_scan_ssids', u8),
     46: ('generation', u32),
+    50: ('supported_commands', string), # XXX
+    56: ('max_scan_ie_len', u16),
+    57: ('cipher_suites', string), # XXX
+    61: ('wiphy_retry_short', u8),
+    62: ('wiphy_retry_long', u8),
+    63: ('wiphy_frag_threshold', u32),
+    64: ('wiphy_rts_threshold', u32),
+    86: ('max_num_pmkids', u8),
+    89: ('wiphy_coverage_class', u8),
+    99: ('tx_frame_types', string), # XXX
+    100: ('rx_frame_types', string), # XXX
+    102: ('control_port_ethertype', flag), # XXX
+    104: ('support_ibss_rsn', flag),
+    108: ('offchannel_tx_ok', flag),
+    113: ('wiphy_antenna_avail_tx', u32),
+    114: ('wiphy_antenna_avail_rx', u32),
+    115: ('support_mesh_auth', flag),
+    120: ('interface_combinations', string), # XXX
+    121: ('software_iftypes', string), # XXX
+    123: ('max_num_sched_scan_ssids', u8),
+    124: ('max_num_sched_scan_ie_len', u16),
+    133: ('max_match_sets', u8),
+    143: ('feature_flags', u32),
+    148: ('ht_capability_mask', string), # XXX
+    169: ('ext_capa', string), # XXX
+    170: ('ext_capa_mask', string), # XXX
+    176: ('vht_capability_mask', string), # XXX
   })
 
   commands = {
+    'get_wiphy': 1,
     'get_station': 17,
   }
 
@@ -415,4 +448,4 @@ def GetIfIndex(if_name):
 
 gnl = GenericNetlink()
 RegisterNL80211(gnl)
-print list(gnl.Query('nl80211', ['dump'], 'get_station', 0, ifindex=GetIfIndex('wlan0')))
+print list(gnl.Query('nl80211', ['dump'], 'get_wiphy', 0))
