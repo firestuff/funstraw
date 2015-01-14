@@ -217,8 +217,10 @@ class Netlink(object):
    while True:
      data = self._sock.recv(4096)
      iterator = Iterator(data)
-     hdr = self._nlmsghdr.Unpack(iterator)
-     self._response_queues[hdr['seq']].put(data)
+     while not iterator.AtEnd():
+     	hdr = self._nlmsghdr.Unpack(iterator)
+        sublen = hdr['length'] - self._nlmsghdr.size
+        self._response_queues[hdr['seq']].put((hdr, iterator.ExtractIterator(sublen)))
 
   def _NextSeq(self):
     with self._seq_lock:
@@ -245,17 +247,14 @@ class Netlink(object):
 
   def Recv(self, seq):
     while True:
-      data = self._response_queues[seq].get()
-      iterator = Iterator(data)
-      while not iterator.AtEnd():
-        myhdr = self._nlmsghdr.Unpack(iterator)
-        if myhdr['type'] == self._NLMSG_DONE:
-          del self._response_queues[seq]
-          return
-        yield (myhdr['type'], iterator.ExtractIterator(myhdr['length'] - self._nlmsghdr.size))
-        if not myhdr['flags'] & self._NLMSG_F_MULTI:
-          del self._response_queues[seq]
-          return
+      myhdr, subiter = self._response_queues[seq].get()
+      if myhdr['type'] == self._NLMSG_DONE:
+        del self._response_queues[seq]
+        return
+      yield (myhdr['type'], subiter)
+      if not myhdr['flags'] & self._NLMSG_F_MULTI:
+        del self._response_queues[seq]
+        return
 
 
 class GenericNetlink(object):
@@ -297,14 +296,13 @@ class GenericNetlink(object):
     self._netlink = Netlink()
     self._UpdateMsgTypes()
     for msg in self.Query('nlctrl', ['dump'], 'getfamily', 1):
-      msgtype, attrs = msg
-      assert msgtype == self._msgtypes_by_name['nlctrl']['commands']['newfamily'], msgtype
-      family_name = attrs['family_name'].rstrip('\0')
+      assert msg['cmd'] == 'newfamily', msg['cmd']
+      family_name = msg['attrs']['family_name'].rstrip('\0')
       if family_name in self._msgtypes_by_name:
-        assert attrs['family_id'] == self._msgtypes_by_name[family_name]['id'], attrs['family_id']
+        assert msg['attrs']['family_id'] == self._msgtypes_by_name[family_name]['id'], msg['attrs']['family_id']
       else:
         self._msgtypes.append({
-          'id': attrs['family_id'],
+          'id': msg['attrs']['family_id'],
           'name': family_name,
           'parser': None,
           'commands': None,
@@ -336,10 +334,13 @@ class GenericNetlink(object):
     return self._netlink.Send(msgtype['id'], flags, str(accumulator))
 
   def Recv(self, seq):
-    for msgtype, iterator in self._netlink.Recv(seq):
+    for msgtype_id, iterator in self._netlink.Recv(seq):
       genlhdr = self._genlmsghdr.Unpack(iterator)
-      parser = self._msgtypes_by_id[msgtype]['parser']
-      yield (genlhdr['cmd'], parser.Unpack(iterator))
+      msgtype = self._msgtypes_by_id[msgtype_id]
+      yield {
+        'cmd': [k for k, v in msgtype['commands'].iteritems() if v == genlhdr['cmd']][0],
+        'attrs': msgtype['parser'].Unpack(iterator),
+      }
 
   def Query(self, msgtype, flags, cmd, version, **attrs):
     seq = self.Send(msgtype, flags, cmd, version, **attrs)
@@ -383,6 +384,19 @@ def RegisterNL80211(gnl):
     24: ('tx_bytes_64', u64),
   })
 
+  supported_iftypes = Attributes({
+    1: ('adhoc', flag),
+    2: ('station', flag),
+    3: ('ap', flag),
+    4: ('ap_vlan', flag),
+    5: ('wds', flag),
+    6: ('monitor', flag),
+    7: ('mesh_point', flag),
+    8: ('p2p_client', flag),
+    9: ('p2p_go', flag),
+    10: ('p2p_device', flag),
+  })
+
   nl80211_attr = Attributes({
     1: ('wiphy', u32),
     2: ('wiphy_name', string),
@@ -390,7 +404,7 @@ def RegisterNL80211(gnl):
     6: ('mac', string),
     21: ('sta_info', sta_info),
     22: ('wiphy_bands', string), # XXX
-    32: ('supported_iftypes', string), # XXX
+    32: ('supported_iftypes', supported_iftypes),
     43: ('max_num_scan_ssids', u8),
     46: ('generation', u32),
     50: ('supported_commands', string), # XXX
@@ -411,7 +425,7 @@ def RegisterNL80211(gnl):
     114: ('wiphy_antenna_avail_rx', u32),
     115: ('support_mesh_auth', flag),
     120: ('interface_combinations', string), # XXX
-    121: ('software_iftypes', string), # XXX
+    121: ('software_iftypes', supported_iftypes),
     123: ('max_num_sched_scan_ssids', u8),
     124: ('max_num_sched_scan_ie_len', u16),
     133: ('max_match_sets', u8),
@@ -424,6 +438,7 @@ def RegisterNL80211(gnl):
 
   commands = {
     'get_wiphy': 1,
+    'new_wiphy': 3,
     'get_station': 17,
   }
 
