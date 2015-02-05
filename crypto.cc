@@ -50,19 +50,19 @@ CryptoPubServer::~CryptoPubServer() {
 	}
 }
 
-int CryptoPubServer::OnReadable() {
+void CryptoPubServer::OnReadable() {
 	struct sockaddr_in6 client;
 	socklen_t client_len = sizeof(client);
 	auto client_fd = accept(fd_, (struct sockaddr*) &client, &client_len);
 	if (client_fd == -1) {
 		perror("accept");
-		return -1;
+		return;
 	}
 
 	char buf[128];
 	inet_ntop(AF_INET6, &client.sin6_addr, buf, 128);
 	std::cerr << "New connection from [" << buf << "]:" << ntohs(client.sin6_port) << std::endl;
-	auto peer = new CryptoPubPeer(client_fd, secret_key_);
+	auto peer = new CryptoPubServerConnection(client_fd, secret_key_);
 	
 	epoll_event event = {
 		.events = EPOLLIN,
@@ -71,8 +71,6 @@ int CryptoPubServer::OnReadable() {
 		},
 	};
 	epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &event);
-
-	return -1;
 }
 
 void CryptoPubServer::Loop() {
@@ -82,26 +80,22 @@ void CryptoPubServer::Loop() {
 		for (int i = 0; i < num_events; i++) {
 			if (events[i].events & EPOLLIN) {
 				auto obj = (CryptoBase*) events[i].data.ptr;
-				auto fd = obj->OnReadable();
-				if (fd >= 0) {
-					epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &events[i]);
-				}
+				obj->OnReadable();
 			}
 		}
 	}
 }
 
 
-CryptoPubPeer::CryptoPubPeer(const int fd, const std::string secret_key)
+CryptoPubServerConnection::CryptoPubServerConnection(const int fd, const std::string secret_key)
 	: CryptoBase(fd),
 	  secret_key_(secret_key) {
 }
 
-int CryptoPubPeer::OnReadable() {
+void CryptoPubServerConnection::OnReadable() {
 	char buf[128];
 	if (read(fd_, buf, 128) == 0) {
-		auto fd = fd_;
 		delete this;
-		return fd;
+		return;
 	}
 }

@@ -9,16 +9,16 @@ class CryptoBase {
 
 		static void GenKey(std::string* key);
 		static void GenKeyPair(std::string* secret_key, std::string* public_key);
-		virtual int OnReadable() = 0;
+		virtual void OnReadable() = 0;
 
 	protected:
 		const int fd_;
 };
 
-class CryptoPubPeer : public CryptoBase {
+class CryptoPubServerConnection : public CryptoBase {
 	public:
-		CryptoPubPeer(const int fd, const std::string secret_key);
-		int OnReadable();
+		CryptoPubServerConnection(const int fd, const std::string secret_key);
+		void OnReadable();
 
 	private:
 		const std::string secret_key_;
@@ -29,7 +29,7 @@ class CryptoPubServer : public CryptoBase {
 	public:
 		CryptoPubServer(const int fd, const std::string secret_key);
 		~CryptoPubServer();
-		int OnReadable();
+		void OnReadable();
 		void Loop();
 
 	private:
