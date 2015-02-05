@@ -11,8 +11,8 @@
 int main() {
 	int fd = socket(PF_INET6, SOCK_STREAM, 0);
 
-  int optval = 1;
-  setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+	int optval = 1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
 
 	struct sockaddr_in6 server_addr = {0};
  	server_addr.sin6_family = AF_INET6;
