@@ -1,7 +1,10 @@
-all: auth-server gen-pubkeypair
+all: auth-server gen-keypair
 
-auth-server: auth-server.cc
-	g++ -o auth-server auth-server.cc nacl/build/instance1/lib/amd64/randombytes.o nacl/build/instance1/lib/amd64/libnacl.a
+%.o: %.cc
+	g++ -c -o $@ $<
 
-gen-pubkeypair: gen-pubkeypair.cc
-	g++ -o gen-pubkeypair gen-pubkeypair.cc nacl/build/instance1/lib/amd64/randombytes.o nacl/build/instance1/lib/amd64/libnacl.a
+auth-server: auth-server.o crypto.o
+	g++ -o auth-server auth-server.o crypto.o nacl/build/instance1/lib/amd64/randombytes.o nacl/build/instance1/lib/amd64/libnacl.a
+
+gen-keypair: gen-keypair.o crypto.o
+	g++ -o gen-keypair gen-keypair.o crypto.o nacl/build/instance1/lib/amd64/randombytes.o nacl/build/instance1/lib/amd64/libnacl.a
