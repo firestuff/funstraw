@@ -19,8 +19,7 @@ int main(int argc, char *argv[]) {
 			std::cerr << "Failed to open key file" << std::endl;
 			return 1;
 		}
-		key_file << "# Shared secret key" << std::endl;
-		key_file << CryptoBase::BinToHex(key) << std::endl;
+		key_file << key;
 	}
 
 	return 0;
