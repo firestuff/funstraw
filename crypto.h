@@ -23,6 +23,11 @@ class CryptoPubServerConnection : public CryptoBase {
 	private:
 		const std::string secret_key_;
 		const std::string ephemeral_secret_key_;
+		const std::string client_public_key_;
+		enum {
+			AWAITING_HANDSHAKE,
+			READY,
+		} state_;
 };
 
 class CryptoPubServer : public CryptoBase {

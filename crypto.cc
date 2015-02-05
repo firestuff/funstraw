@@ -89,7 +89,8 @@ void CryptoPubServer::Loop() {
 
 CryptoPubServerConnection::CryptoPubServerConnection(const int fd, const std::string secret_key)
 	: CryptoBase(fd),
-	  secret_key_(secret_key) {
+	  secret_key_(secret_key),
+    state_(AWAITING_HANDSHAKE) {
 }
 
 void CryptoPubServerConnection::OnReadable() {
