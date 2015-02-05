@@ -6,32 +6,31 @@
 
 int main(int argc, char *argv[]) {
 	if (argc < 3) {
-		std::cerr << "Usage: " << argv[0] << " secret_filename public_filename" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " secret_key_filename public_key_filename" << std::endl;
 		return 1;
 	}
 
-	std::string pk;
-	std::string sk;
-	CryptoBase::GenKeyPair(&sk, &pk);
+	std::string secret_key, public_key;
+	CryptoBase::GenKeyPair(&secret_key, &public_key);
 
 	{
-		std::fstream skf(argv[1], std::fstream::out);
-		if (skf.fail()) {
+		std::fstream secret_key_file(argv[1], std::fstream::out);
+		if (secret_key_file.fail()) {
 			std::cerr << "Failed to open secret key file" << std::endl;
 			return 1;
 		}
-		skf << "# Secret key" << std::endl;
-		skf << CryptoBase::BinToHex(sk) << std::endl;
+		secret_key_file << "# Secret key" << std::endl;
+		secret_key_file << CryptoBase::BinToHex(secret_key) << std::endl;
 	}
 
 	{
-		std::fstream pkf(argv[2], std::fstream::out);
-		if (pkf.fail()) {
+		std::fstream public_key_file(argv[2], std::fstream::out);
+		if (public_key_file.fail()) {
 			std::cerr << "Failed to open public key file" << std::endl;
 			return 1;
 		}
-		pkf << "# Public key" << std::endl;
-		pkf << CryptoBase::BinToHex(pk) << std::endl;
+		public_key_file << "# Public key" << std::endl;
+		public_key_file << CryptoBase::BinToHex(public_key) << std::endl;
 	}
 
 	return 0;
