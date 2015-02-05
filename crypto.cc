@@ -1,6 +1,8 @@
 #include "crypto.h"
 
 #include "nacl/build/instance1/include/amd64/crypto_box.h"
+#include "nacl/build/instance1/include/amd64/crypto_secretbox.h"
+#include "nacl/build/instance1/include/amd64/randombytes.h"
 
 std::string CryptoBase::BinToHex(const std::string& bin) {
 	static const char *hex = "0123456789ABCDEF";
@@ -14,6 +16,12 @@ std::string CryptoBase::BinToHex(const std::string& bin) {
 	return ret;
 }
 
-void CryptoBase::GenKeyPair(std::string* sk, std::string* pk) {
-	*pk = crypto_box_keypair(sk);
+void CryptoBase::GenKey(std::string* key) {
+	char buf[crypto_secretbox_KEYBYTES];
+	randombytes((unsigned char *)buf, crypto_secretbox_KEYBYTES);
+	*key = buf;
+}
+
+void CryptoBase::GenKeyPair(std::string* secret_key, std::string* public_key) {
+	*public_key = crypto_box_keypair(secret_key);
 }
