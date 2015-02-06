@@ -3,13 +3,15 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <cassert>
 #include <iostream>
+
+#include <sodium/crypto_box.h>
+#include <sodium/crypto_secretbox.h>
+#include <sodium/randombytes.h>
 
 #include "crypto.h"
 
-#include "nacl/build/instance1/include/amd64/crypto_box.h"
-#include "nacl/build/instance1/include/amd64/crypto_secretbox.h"
-#include "nacl/build/instance1/include/amd64/randombytes.h"
 
 CryptoBase::CryptoBase(const int fd)
 	: fd_(fd) {}
@@ -21,13 +23,17 @@ CryptoBase::~CryptoBase() {
 }
 
 void CryptoBase::GenKey(std::string* key) {
-	char buf[crypto_secretbox_KEYBYTES];
-	randombytes((unsigned char *)buf, crypto_secretbox_KEYBYTES);
-	*key = buf;
+	unsigned char buf[crypto_secretbox_KEYBYTES];
+	randombytes_buf(buf, crypto_secretbox_KEYBYTES);
+	key->assign((char*)buf, crypto_secretbox_KEYBYTES);
 }
 
 void CryptoBase::GenKeyPair(std::string* secret_key, std::string* public_key) {
-	*public_key = crypto_box_keypair(secret_key);
+	unsigned char public_key_buf[crypto_box_PUBLICKEYBYTES];
+	unsigned char secret_key_buf[crypto_box_PUBLICKEYBYTES];
+	assert(crypto_box_keypair(public_key_buf, secret_key_buf) == 0);
+	public_key->assign((char*)public_key_buf, crypto_box_PUBLICKEYBYTES);
+	secret_key->assign((char*)secret_key_buf, crypto_box_SECRETKEYBYTES);
 }
 
 

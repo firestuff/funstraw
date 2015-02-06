@@ -11,6 +11,8 @@ class TLVNode {
 		static TLVNode* Decode(const std::string& input);
 		void Encode(std::string *output);
 
+		bool IsContainer();
+
 	private:
 		const uint16_t type_;
 		const std::string value_;
