@@ -43,7 +43,7 @@ void TLVNode::Encode(std::string *output) const {
 	}
 }
 
-TLVNode* TLVNode::Decode(const std::string& input) {
+std::unique_ptr<TLVNode> TLVNode::Decode(const std::string& input) {
 	if (input.length() < sizeof(struct header)) {
 		return nullptr;
 	}
@@ -71,10 +71,10 @@ TLVNode* TLVNode::Decode(const std::string& input) {
 			cursor += sub_length;
 		}
 
-		return container.release();
+		return container;
 	} else {
 		// Scalar
-		return new TLVNode(htons(header->type), input.substr(sizeof(*header), htons(header->value_length)));
+		return std::unique_ptr<TLVNode>(new TLVNode(htons(header->type), input.substr(sizeof(*header), htons(header->value_length))));
 	}
 }
 

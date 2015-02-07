@@ -16,8 +16,8 @@ class CryptoUtil {
 		static void ReadKeyFromFile(const std::string& filename, std::string* key);
 		static void WriteKeyToFile(const std::string& filename, const std::string& key);
 
-		static void EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container);
-		static TLVNode *DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> EncodeEncrypt(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
 };
 
 class CryptoBase {
@@ -29,6 +29,9 @@ class CryptoBase {
 class CryptoConnBase : public CryptoBase {
 	protected:
 		CryptoConnBase(const std::string& secret_key);
+
+		std::unique_ptr<TLVNode> BuildSecureHandshake();
+		bool HandleSecureHandshake(const TLVNode& node);
 
 		enum {
 			AWAITING_HANDSHAKE,

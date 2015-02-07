@@ -9,7 +9,7 @@ class TLVNode {
 		TLVNode(const uint16_t type, const std::string value);
 		~TLVNode();
 
-		static TLVNode* Decode(const std::string& input);
+		static std::unique_ptr<TLVNode> Decode(const std::string& input);
 
 		void AppendChild(TLVNode* child);
 
