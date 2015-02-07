@@ -15,6 +15,9 @@ class CryptoBase {
 		static void DerivePublicKey(const std::string& secret_key, std::string* public_key);
 		static void EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container);
 		TLVNode *DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
+
+		std::ostream& Log(void *obj=nullptr);
+		std::ostream& LogFatal(void *obj=nullptr);
 };
 
 class CryptoPubServerConnection;
@@ -75,6 +78,7 @@ class CryptoPubClient : public CryptoBase {
 		void OnReadable();
 		static void OnConnectOrError_(struct bufferevent* bev, const short what, void* this__);
 		void OnConnect();
+		void OnError();
 
 		struct event_base* event_base_;
 		struct bufferevent* bev_;

@@ -86,11 +86,23 @@ TLVNode* CryptoBase::DecryptDecode(const std::string& secret_key, const std::str
 
 	unsigned char output[decrypted_bytes];
 	if (crypto_box_open_easy(output, (const unsigned char*)encrypted->GetValue().data(), encrypted->GetValue().length(), (const unsigned char*)nonce->GetValue().data(), (const unsigned char*)public_key.data(), (const unsigned char*)secret_key.data())) {
-		std::cerr << "Decryption failure" << std::endl;
+		Log() << "Decryption failure" << std::endl;
 		return nullptr;
 	}
 
 	return TLVNode::Decode(std::string((char*)output, decrypted_bytes));
+}
+
+std::ostream& CryptoBase::Log(void *obj) {
+	char buf[64];
+	snprintf(buf, 64, "[%p] ", obj ? obj : this);
+	return std::cerr << buf;
+}
+
+std::ostream& CryptoBase::LogFatal(void *obj) {
+	std::ostream& ret = Log(obj);
+	delete this;
+	return ret;
 }
 
 
@@ -123,13 +135,14 @@ void CryptoPubServer::OnNewConn(int client_fd, struct sockaddr* client_addr_, in
 
 	char buf[128];
 	inet_ntop(AF_INET6, &client_addr->sin6_addr, buf, 128);
-	std::cerr << "New connection from [" << buf << "]:" << ntohs(client_addr->sin6_port) << std::endl;
 
 	auto bev = bufferevent_socket_new(this->event_base_, client_fd, BEV_OPT_CLOSE_ON_FREE);
 	bufferevent_enable(bev, EV_READ);
 	bufferevent_enable(bev, EV_WRITE);
 	auto peer = new CryptoPubServerConnection(bev, this->secret_key_);
 	bufferevent_setcb(bev, &CryptoPubServerConnection::OnReadable_, NULL, &CryptoPubServerConnection::OnError_, peer);
+
+	Log(peer) << "New connection from [" << buf << "]:" << ntohs(client_addr->sin6_port) << std::endl;
 }
 
 void CryptoPubServer::Loop() {
@@ -144,7 +157,7 @@ CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, co
 }
 
 CryptoPubServerConnection::~CryptoPubServerConnection() {
-	std::cerr << "Connection closed" << std::endl;
+	Log() << "Connection closed" << std::endl;
 	bufferevent_free(bev_);
 }
 
@@ -164,40 +177,34 @@ void CryptoPubServerConnection::OnReadable() {
 
 	auto client_public_key = decoded->FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!client_public_key) {
-		std::cerr << "Protocol error (client handshake -- no public key)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- no public key)" << std::endl;
 		return;
 	}
 	client_public_key_ = client_public_key->GetValue();
 	if (client_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
-		std::cerr << "Protocol error (client handshake -- wrong public key length)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- wrong public key length)" << std::endl;
 		return;
 	}
 	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
-		std::cerr << "Protocol error (client handshake -- no encrypted portion)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- no encrypted portion)" << std::endl;
 		return;
 	}
 
 	std::unique_ptr<TLVNode> decrypted(DecryptDecode(secret_key_, client_public_key->GetValue(), *encrypted));
 	if (!decrypted.get()) {
-		std::cerr << "Protocol error (client handshake -- decryption failure)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- decryption failure)" << std::endl;
 		return;
 	}
 
 	auto client_ephemeral_public_key = decrypted->FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!client_ephemeral_public_key) {
-		std::cerr << "Protocol error (client handshake -- no ephemeral public key)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- no ephemeral public key)" << std::endl;
 		return;
 	}
 	client_ephemeral_public_key_ = client_ephemeral_public_key->GetValue();
 	if (client_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
-		std::cerr << "Protocol error (client handshake -- wrong ephemeral public key length)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (client handshake -- wrong ephemeral public key length)" << std::endl;
 		return;
 	}
 
@@ -214,7 +221,7 @@ void CryptoPubServerConnection::OnReadable() {
 	bufferevent_write(bev_, out.data(), out.length());
 
 	this->state_ = READY;
-	std::cerr << "Handshake successful" << std::endl;
+	Log() << "Handshake successful" << std::endl;
 }
 
 void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {
@@ -276,44 +283,42 @@ void CryptoPubClient::OnReadable() {
 
 	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
-		std::cerr << "Protocol error (server handshake -- no encrypted portion)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (server handshake -- no encrypted portion)" << std::endl;
 		return;
 	}
 
 	std::unique_ptr<TLVNode> decrypted(DecryptDecode(secret_key_, server_public_key_, *encrypted));
 	if (!decrypted.get()) {
-		std::cerr << "Protocol error (server handshake -- decryption failure)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (server handshake -- decryption failure)" << std::endl;
 		return;
 	}
 
 	auto server_ephemeral_public_key = decrypted->FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!server_ephemeral_public_key) {
-		std::cerr << "Protocol error (server handshake -- no ephemeral public key)" << std::endl;
-		delete this;
+		LogFatal() << "Protocol error (server handshake -- no ephemeral public key)" << std::endl;
 		return;
 	}
 	server_ephemeral_public_key_ = server_ephemeral_public_key->GetValue();
 	if (server_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
-		std::cerr << "Protocol error (server handshake -- wrong ephemeral public key length)" << std::endl;
-		delete this;
+		LogFatal() <<  "Protocol error (server handshake -- wrong ephemeral public key length)" << std::endl;
 		return;
 	}
 
 	this->state_ = READY;
-	std::cerr << "Handshake successful" << std::endl;
+	Log() << "Handshake successful" << std::endl;
 }
 
 void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short what, void* this__) {
 	auto this_ = (CryptoPubClient*)this__;
 	if (what == BEV_EVENT_CONNECTED) {
 		this_->OnConnect();
+	} else {
+		this_->OnError();
 	}
 }
 
 void CryptoPubClient::OnConnect() {
-	std::cerr << "Connected to server" << std::endl;
+	Log() << "Connected to server" << std::endl;
 
 	std::string ephemeral_public_key;
 	GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
@@ -327,6 +332,10 @@ void CryptoPubClient::OnConnect() {
 	std::string out;
 	handshake.Encode(&out);
 	bufferevent_write(bev_, out.data(), out.length());
+}
+
+void CryptoPubClient::OnError() {
+	Log() << "Connection error" << std::endl;
 }
 
 void CryptoPubClient::Loop() {
