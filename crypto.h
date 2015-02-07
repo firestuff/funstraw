@@ -33,10 +33,17 @@ class CryptoConnBase : public CryptoBase {
 		std::unique_ptr<TLVNode> BuildSecureHandshake();
 		bool HandleSecureHandshake(const TLVNode& node);
 
+		static void OnReadable_(struct bufferevent* bev, void* this__);
+		void OnReadable();
+		virtual void OnHandshake(const TLVNode& decoded) = 0;
+		virtual bool OnMessage(const TLVNode& node) = 0;
+
 		enum {
 			AWAITING_HANDSHAKE,
 			READY,
 		} state_;
+
+		struct bufferevent* bev_;
 
 		const std::string secret_key_;
 		std::string peer_public_key_;
@@ -68,15 +75,13 @@ class CryptoPubServerConnection : public CryptoConnBase {
 		~CryptoPubServerConnection();
 
 	private:
-		static void OnReadable_(struct bufferevent* bev, void* this__);
-		void OnReadable();
 		void OnHandshake(const TLVNode& decoded);
+		bool OnMessage(const TLVNode& node);
+
 		static void OnError_(struct bufferevent* bev, const short what, void* this__);
 		void OnError(const short what);
 
 		void SendHandshake();
-
-		struct bufferevent* bev_;
 
 		friend CryptoPubServer;
 };
@@ -91,9 +96,9 @@ class CryptoPubClient : public CryptoConnBase {
 		void Loop();
 
 	private:
-		static void OnReadable_(struct bufferevent* bev, void* this__);
-		void OnReadable();
 		void OnHandshake(const TLVNode& decoded);
+		bool OnMessage(const TLVNode& node);
+
 		static void OnConnectOrError_(struct bufferevent* bev, const short what, void* this__);
 		void OnConnect();
 		void OnError();
@@ -102,7 +107,6 @@ class CryptoPubClient : public CryptoConnBase {
 		void SendTunnelRequest();
 
 		struct event_base* event_base_;
-		struct bufferevent* bev_;
 
 		const std::list<uint64_t> channel_bitrates_;
 };

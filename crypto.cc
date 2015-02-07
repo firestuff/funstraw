@@ -165,6 +165,44 @@ bool CryptoConnBase::HandleSecureHandshake(const TLVNode& node) {
 	return true;
 }
 
+void CryptoConnBase::OnReadable_(struct bufferevent* bev, void* this__) {
+	auto this_ = (CryptoConnBase*)this__;
+	this_->OnReadable();
+}
+
+void CryptoConnBase::OnReadable() {
+	char buf[UINT16_MAX];
+	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
+	const std::string input(buf, bytes);
+	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
+
+	if (!decoded.get()) {
+		// TODO: re-buffer?
+		return;
+	}
+
+	if (state_ == AWAITING_HANDSHAKE) {
+		OnHandshake(*decoded);
+		return;
+	}
+
+	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
+		LogFatal() << "Protocol error (wrong message type)" << std::endl;
+		return;
+	}
+
+	std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(ephemeral_secret_key_, peer_ephemeral_public_key_, *decoded));
+	if (!decrypted.get()) {
+		LogFatal() << "Protocol error (decryption failure)" << std::endl;
+		return;
+	}
+
+	if (!OnMessage(*decrypted)) {
+		LogFatal() << "Protocol error (message handling)" << std::endl;
+		return;
+	}
+}
+
 
 CryptoPubServer::CryptoPubServer(const std::string& secret_key)
 	: secret_key_(secret_key),
@@ -211,49 +249,13 @@ void CryptoPubServer::Loop() {
 
 
 CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key)
-	: CryptoConnBase(secret_key),
-	  bev_(bev) {
+	: CryptoConnBase(secret_key) {
+	bev_ = bev;
 }
 
 CryptoPubServerConnection::~CryptoPubServerConnection() {
 	Log() << "Connection closed" << std::endl;
 	bufferevent_free(bev_);
-}
-
-void CryptoPubServerConnection::OnReadable_(struct bufferevent* bev, void* this__) {
-	auto this_ = (CryptoPubServerConnection*)this__;
-	this_->OnReadable();
-}
-
-void CryptoPubServerConnection::OnReadable() {
-	char buf[UINT16_MAX];
-	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
-	const std::string input(buf, bytes);
-	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
-
-	if (!decoded.get()) {
-		// TODO: re-buffer?
-		return;
-	}
-
-	if (state_ == AWAITING_HANDSHAKE) {
-		OnHandshake(*decoded);
-		return;
-	}
-
-	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
-		LogFatal() << "Protocol error (wrong message type)" << std::endl;
-		return;
-	}
-
-  std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(ephemeral_secret_key_, peer_ephemeral_public_key_, *decoded));
-	if (!decrypted.get()) {
-		LogFatal() << "Protocol error (decryption failure)" << std::endl;
-		return;
-	}
-
-	switch (decrypted->GetType()) {
-	}
 }
 
 void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
@@ -288,6 +290,13 @@ void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
 	Log() << "Handshake successful (client ID: " << CryptoUtil::BinToHex(peer_public_key_) << ")" << std::endl;
 }
 
+bool CryptoPubServerConnection::OnMessage(const TLVNode& message) {
+	switch (message.GetType()) {
+		default:
+			return false;
+	}
+}
+
 void CryptoPubServerConnection::SendHandshake() {
 	auto handshake = BuildSecureHandshake();
 	std::string out;
@@ -308,8 +317,8 @@ void CryptoPubServerConnection::OnError(const short what) {
 CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates)
 	: CryptoConnBase(secret_key),
 	  event_base_(event_base_new()),
-	  bev_(bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE)),
 		channel_bitrates_(channel_bitrates) {
+	bev_ = bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE);
 	peer_public_key_ = server_public_key;
 	assert(secret_key_.length() == crypto_box_SECRETKEYBYTES);
 	assert(peer_public_key_.length() == crypto_box_PUBLICKEYBYTES);
@@ -337,42 +346,6 @@ CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address
 	return ret;
 }
 
-void CryptoPubClient::OnReadable_(struct bufferevent* bev, void* this__) {
-	auto this_ = (CryptoPubClient*)this__;
-	this_->OnReadable();
-}
-
-void CryptoPubClient::OnReadable() {
-	char buf[UINT16_MAX];
-	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
-	const std::string input(buf, bytes);
-	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
-
-	if (!decoded.get()) {
-		// TODO: re-buffer?
-		return;
-	}
-
-	if (state_ == AWAITING_HANDSHAKE) {
-		OnHandshake(*decoded);
-		return;
-	}
-
-	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
-		LogFatal() << "Protocol error (unexpected message type)" << std::endl;
-		return;
-	}
-
-  std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(ephemeral_secret_key_, peer_ephemeral_public_key_, *decoded));
-	if (!decrypted.get()) {
-		LogFatal() << "Protocol error (decryption failure)" << std::endl;
-		return;
-	}
-
-	switch (decrypted->GetType()) {
-	}
-}
-
 void CryptoPubClient::OnHandshake(const TLVNode& decoded) {
 	if (!HandleSecureHandshake(decoded)) {
 		return;
@@ -382,6 +355,13 @@ void CryptoPubClient::OnHandshake(const TLVNode& decoded) {
 	Log() << "Handshake successful" << std::endl;
 
 	SendTunnelRequest();
+}
+
+bool CryptoPubClient::OnMessage(const TLVNode& message) {
+	switch (message.GetType()) {
+		default:
+			return false;
+	}
 }
 
 void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short what, void* this__) {
