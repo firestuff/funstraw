@@ -26,6 +26,17 @@
 #define TLV_TYPE_SERVER_HANDSHAKE_SECURE 0x8002
 
 
+std::string CryptoBase::BinToHex(const std::string& bin) {
+	static const char hex[] = "0123456789abcdef";
+	std::string ret;
+	ret.reserve(bin.length() * 2);
+	for (int i = 0; i < bin.length(); i++) {
+		ret.push_back(hex[(bin[i] & 0xf0) >> 4]);
+		ret.push_back(hex[bin[i] & 0x0f]);
+	}
+	return ret;
+}
+
 void CryptoBase::GenKey(std::string* key) {
 	unsigned char buf[crypto_secretbox_KEYBYTES];
 	randombytes_buf(buf, crypto_secretbox_KEYBYTES);
@@ -243,7 +254,7 @@ void CryptoPubServerConnection::OnHandshake(const std::string& input) {
 	bufferevent_write(bev_, out.data(), out.length());
 
 	this->state_ = READY;
-	Log() << "Handshake successful" << std::endl;
+	Log() << "Handshake successful (client ID: " << BinToHex(client_public_key_) << ")" << std::endl;
 }
 
 void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {
