@@ -4,12 +4,16 @@
 
 #include <string>
 
+#include "tlv.h"
+
 class CryptoBase {
 	public:
 		virtual ~CryptoBase() {};
 
 		static void GenKey(std::string* key);
 		static void GenKeyPair(std::string* secret_key, std::string* public_key);
+		static void DerivePublicKey(const std::string& secret_key, std::string* public_key);
+		static void EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container);
 };
 
 class CryptoPubServerConnection;
@@ -56,10 +60,10 @@ class CryptoPubServerConnection : public CryptoBase {
 
 class CryptoPubClient : public CryptoBase {
 	public:
-		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen);
+		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key);
 		~CryptoPubClient();
 
-		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port);
+		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key);
 
 		void Loop();
 
@@ -71,4 +75,9 @@ class CryptoPubClient : public CryptoBase {
 
 		struct event_base* event_base_;
 		struct bufferevent* bev_;
+
+		const std::string secret_key_;
+		const std::string server_public_key_;
+		std::string public_key_;
+		std::string ephemeral_secret_key_;
 };

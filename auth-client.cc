@@ -67,6 +67,6 @@ int main(int argc, char *argv[]) {
 		server_public_key_file >> server_public_key;
 	}
 
-	auto client = CryptoPubClient::FromHostname(server_address, server_port);
+	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key);
 	client->Loop();
 }

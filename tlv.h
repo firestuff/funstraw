@@ -9,9 +9,11 @@ class TLVNode {
 		TLVNode(const uint16_t type, const std::string value);
 
 		static TLVNode* Decode(const std::string& input);
-		void Encode(std::string *output);
 
-		bool IsContainer();
+		void AppendChild(const TLVNode& child);
+
+		void Encode(std::string *output) const;
+		bool IsContainer() const;
 
 	private:
 		const uint16_t type_;
