@@ -15,6 +15,12 @@ TLVNode::TLVNode(const uint16_t type, const std::string value)
 	: type_(type),
 	  value_(value) {}
 
+TLVNode::~TLVNode() {
+	for (auto child : children_) {
+		delete child;
+	}
+}
+
 void TLVNode::Encode(std::string *output) const {
 	assert(value_.length() <= UINT16_MAX);
 	struct header header = {
@@ -26,7 +32,7 @@ void TLVNode::Encode(std::string *output) const {
 
 	if (IsContainer()) {
 		for (auto child : children_) {
-			child.Encode(output);
+			child->Encode(output);
 		}
 		size_t total_child_length = output->length() - header_start - sizeof(header);
 		assert(total_child_length <= UINT16_MAX);
@@ -39,12 +45,12 @@ void TLVNode::Encode(std::string *output) const {
 
 TLVNode* TLVNode::Decode(const std::string& input) {
 	if (input.length() < sizeof(struct header)) {
-		return NULL;
+		return nullptr;
 	}
 	auto header = (struct header*)input.data();
 	std::cerr << "[type=" << htons(header->type) << ", value_length=" << htons(header->value_length) << "]" << std::endl;
 	if (input.length() < sizeof(*header) + htons(header->value_length)) {
-		return NULL;
+		return nullptr;
 	}
 
 	if (htons(header->type) & 0x8000) {
@@ -54,29 +60,49 @@ TLVNode* TLVNode::Decode(const std::string& input) {
 		size_t cursor = sizeof(*header);
 		while (cursor < input.length()) {
 			auto next_header = (struct header*)(input.data() + cursor);
-			if (cursor + sizeof(*next_header) + htons(next_header->value_length) > input.length()) {
-				return NULL;
+			size_t sub_length = sizeof(*next_header) + htons(next_header->value_length);
+			if (cursor + sub_length > input.length()) {
+				return nullptr;
 			}
-			std::unique_ptr<TLVNode> child(Decode(input.substr(cursor)));
+			std::unique_ptr<TLVNode> child(Decode(input.substr(cursor, sub_length)));
 			if (!child.get()) {
-				return NULL;
+				return nullptr;
 			}
-			container->AppendChild(*child);
-			cursor += sizeof(*next_header) + htons(next_header->value_length);
+			container->AppendChild(child.release());
+			cursor += sub_length;
 		}
 
 		return container.release();
 	} else {
 		// Scalar
-		return new TLVNode(htons(header->type), input.substr(sizeof(*header)));
+		return new TLVNode(htons(header->type), input.substr(sizeof(*header), htons(header->value_length)));
 	}
 }
 
-void TLVNode::AppendChild(const TLVNode& child) {
+void TLVNode::AppendChild(TLVNode* child) {
 	assert(this->IsContainer());
 	children_.push_back(child);
 }
 
+TLVNode* TLVNode::FindChild(const uint16_t type) const {
+	assert(this->IsContainer());
+	for (auto child : children_) {
+		if (child->GetType() == type) {
+			return child;
+		}
+	}
+	return nullptr;
+}
+
 bool TLVNode::IsContainer() const {
 	return type_ & 0x8000;
+}
+
+uint16_t TLVNode::GetType() const {
+	return type_;
+}
+
+const std::string& TLVNode::GetValue() const {
+	assert(!this->IsContainer());
+	return value_;
 }

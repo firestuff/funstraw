@@ -45,6 +45,9 @@ void CryptoBase::DerivePublicKey(const std::string& secret_key, std::string* pub
 }
 
 void CryptoBase::EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container) {
+	assert(secret_key.length() == crypto_box_SECRETKEYBYTES);
+	assert(public_key.length() == crypto_box_PUBLICKEYBYTES);
+
 	std::string encoded;
 	input.Encode(&encoded);
 
@@ -56,11 +59,36 @@ void CryptoBase::EncodeEncryptAppend(const std::string& secret_key, const std::s
 	unsigned char output[encrypted_bytes];
 	assert(!crypto_box_easy(output, (const unsigned char*)encoded.data(), encoded.length(), nonce, (const unsigned char*)public_key.data(), (const unsigned char*)secret_key.data()));
 
-	TLVNode encrypted(TLV_TYPE_ENCRYPTED);
-	encrypted.AppendChild(TLVNode(TLV_TYPE_NONCE, std::string((char*)nonce, crypto_box_NONCEBYTES)));
-	encrypted.AppendChild(TLVNode(TLV_TYPE_ENCRYPTED_BLOB, std::string((char*)output, encrypted_bytes)));
+	auto encrypted = new TLVNode(TLV_TYPE_ENCRYPTED);
+	encrypted->AppendChild(new TLVNode(TLV_TYPE_NONCE, std::string((char*)nonce, crypto_box_NONCEBYTES)));
+	encrypted->AppendChild(new TLVNode(TLV_TYPE_ENCRYPTED_BLOB, std::string((char*)output, encrypted_bytes)));
 
 	container->AppendChild(encrypted);
+}
+
+TLVNode* CryptoBase::DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input) {
+	assert(secret_key.length() == crypto_box_SECRETKEYBYTES);
+	assert(public_key.length() == crypto_box_PUBLICKEYBYTES);
+	assert(input.GetType() == TLV_TYPE_ENCRYPTED);
+
+	auto nonce = input.FindChild(TLV_TYPE_NONCE);
+	if (!nonce || nonce->GetValue().length() != crypto_box_NONCEBYTES) {
+		return nullptr;
+	}
+	auto encrypted = input.FindChild(TLV_TYPE_ENCRYPTED_BLOB);
+	if (!encrypted || encrypted->GetValue().length() < crypto_box_MACBYTES) {
+		return nullptr;
+	}
+
+	size_t decrypted_bytes = encrypted->GetValue().length() - crypto_box_MACBYTES;
+
+	unsigned char output[decrypted_bytes];
+	if (crypto_box_open_easy(output, (const unsigned char*)encrypted->GetValue().data(), encrypted->GetValue().length(), (const unsigned char*)nonce->GetValue().data(), (const unsigned char*)public_key.data(), (const unsigned char*)secret_key.data())) {
+		std::cerr << "Decryption failure" << std::endl;
+		return nullptr;
+	}
+
+	return TLVNode::Decode(std::string((char*)output, decrypted_bytes));
 }
 
 
@@ -132,6 +160,21 @@ void CryptoPubServerConnection::OnReadable() {
 		return;
 	}
 	std::cerr << "successful decode" << std::endl;
+	auto client_public_key = decoded->FindChild(TLV_TYPE_PUBLIC_KEY);
+	if (!client_public_key || client_public_key->GetValue().length() != crypto_box_PUBLICKEYBYTES) {
+		std::cerr << "Wanted " << crypto_box_PUBLICKEYBYTES << ", got " << client_public_key->GetValue().length() << " bytes" << std::endl;
+		return;
+	}
+	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
+	if (!encrypted) {
+		return;
+	}
+
+	std::unique_ptr<TLVNode> decrypted(DecryptDecode(secret_key_, client_public_key->GetValue(), *encrypted));
+	if (!decrypted.get()) {
+		return;
+	}
+	std::cerr << "successful decrypt" << std::endl;
 }
 
 void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {
@@ -197,9 +240,9 @@ void CryptoPubClient::OnConnect() {
 	GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
 
 	TLVNode handshake(TLV_TYPE_CLIENT_HANDSHAKE);
-	handshake.AppendChild(TLVNode(TLV_TYPE_PUBLIC_KEY, public_key_));
+	handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, public_key_));
 	TLVNode secure_handshake(TLV_TYPE_CLIENT_HANDSHAKE_SECURE);
-	secure_handshake.AppendChild(TLVNode(TLV_TYPE_PUBLIC_KEY, ephemeral_public_key));
+	secure_handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, ephemeral_public_key));
 	EncodeEncryptAppend(secret_key_, server_public_key_, secure_handshake, &handshake);
 
 	std::string out;

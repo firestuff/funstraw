@@ -14,6 +14,7 @@ class CryptoBase {
 		static void GenKeyPair(std::string* secret_key, std::string* public_key);
 		static void DerivePublicKey(const std::string& secret_key, std::string* public_key);
 		static void EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container);
+		TLVNode *DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
 };
 
 class CryptoPubServerConnection;
