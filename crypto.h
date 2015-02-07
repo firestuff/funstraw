@@ -32,6 +32,7 @@ class CryptoPubConnBase : public CryptoBase {
 
 		std::unique_ptr<TLVNode> BuildSecureHandshake();
 		bool HandleSecureHandshake(const TLVNode& node);
+		void EncryptSend(const TLVNode& node);
 
 		static void OnReadable_(struct bufferevent* bev, void* this__);
 		void OnReadable();
@@ -88,10 +89,10 @@ class CryptoPubServerConnection : public CryptoPubConnBase {
 
 class CryptoPubClient : public CryptoPubConnBase {
 	public:
-		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates);
+		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates);
 		~CryptoPubClient();
 
-		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates);
+		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates);
 
 		void Loop();
 
@@ -108,5 +109,5 @@ class CryptoPubClient : public CryptoPubConnBase {
 
 		struct event_base* event_base_;
 
-		const std::list<uint64_t> channel_bitrates_;
+		const std::list<uint32_t> channel_bitrates_;
 };

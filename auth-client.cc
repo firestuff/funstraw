@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 	std::string server_public_key_filename;
 	std::string server_address;
 	std::string server_port;
-	std::list<uint64_t> channel_bitrates;
+	std::list<uint32_t> channel_bitrates;
 	{
 		int option, option_index;
 		while ((option = getopt_long(argc, argv, "s:", long_options, &option_index)) != -1) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 					server_port = optarg;
 					break;
 				case 'b':
-					channel_bitrates.push_back(strtoull(optarg, NULL, 10));
+					channel_bitrates.push_back(strtoul(optarg, NULL, 10));
 					break;
 			}
 		}

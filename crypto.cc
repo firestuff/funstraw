@@ -165,6 +165,13 @@ bool CryptoPubConnBase::HandleSecureHandshake(const TLVNode& node) {
 	return true;
 }
 
+void CryptoPubConnBase::EncryptSend(const TLVNode& node) {
+	auto encrypted = CryptoUtil::EncodeEncrypt(ephemeral_secret_key_, peer_ephemeral_public_key_, node);
+	std::string out;
+	encrypted->Encode(&out);
+	bufferevent_write(bev_, out.data(), out.length());
+}
+
 void CryptoPubConnBase::OnReadable_(struct bufferevent* bev, void* this__) {
 	auto this_ = (CryptoPubConnBase*)this__;
 	this_->OnReadable();
@@ -314,7 +321,7 @@ void CryptoPubServerConnection::OnError(const short what) {
 }
 
 
-CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates)
+CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates)
 	: CryptoPubConnBase(secret_key),
 	  event_base_(event_base_new()),
 		channel_bitrates_(channel_bitrates) {
@@ -334,7 +341,7 @@ CryptoPubClient::~CryptoPubClient() {
 	event_base_free(event_base_);
 }
 
-CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates) {
+CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates) {
 	struct addrinfo* res;
 	int gai_ret = getaddrinfo(server_address.c_str(), server_port.c_str(), NULL, &res);
 	if (gai_ret) {
@@ -393,6 +400,14 @@ void CryptoPubClient::SendHandshake() {
 }
 
 void CryptoPubClient::SendTunnelRequest() {
+	TLVNode tunnel_request(TLV_TYPE_TUNNEL_REQUEST);
+	for (auto channel_bitrate : channel_bitrates_) {
+		auto channel = new TLVNode(TLV_TYPE_CHANNEL);
+		channel_bitrate = htonl(channel_bitrate);
+		channel->AppendChild(new TLVNode(TLV_TYPE_DOWNSTREAM_BITRATE, std::string((char*)&channel_bitrate, sizeof(channel_bitrate))));
+		tunnel_request.AppendChild(channel);
+	}
+	EncryptSend(tunnel_request);
 }
 
 void CryptoPubClient::OnError() {
