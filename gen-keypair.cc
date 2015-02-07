@@ -11,10 +11,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::string secret_key, public_key;
-	CryptoBase::GenKeyPair(&secret_key, &public_key);
+	CryptoUtil::GenKeyPair(&secret_key, &public_key);
 
-	CryptoBase::WriteKeyToFile(argv[1], secret_key);
-	CryptoBase::WriteKeyToFile(argv[2], public_key);
+	CryptoUtil::WriteKeyToFile(argv[1], secret_key);
+	CryptoUtil::WriteKeyToFile(argv[2], public_key);
 
 	return 0;
 }

@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::string secret_key;
-	CryptoBase::ReadKeyFromFile(secret_key_filename, &secret_key);
+	CryptoUtil::ReadKeyFromFile(secret_key_filename, &secret_key);
 
 	CryptoPubServer server(secret_key);
 	server.Loop();

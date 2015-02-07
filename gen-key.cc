@@ -11,9 +11,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::string key;
-	CryptoBase::GenKey(&key);
+	CryptoUtil::GenKey(&key);
 
-	CryptoBase::WriteKeyToFile(argv[1], key);
+	CryptoUtil::WriteKeyToFile(argv[1], key);
 
 	return 0;
 }
