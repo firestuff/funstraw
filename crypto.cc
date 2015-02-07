@@ -130,11 +130,11 @@ std::ostream& CryptoBase::LogFatal(void *obj) {
 }
 
 
-CryptoConnBase::CryptoConnBase(const std::string& secret_key)
+CryptoPubConnBase::CryptoPubConnBase(const std::string& secret_key)
 	: secret_key_(secret_key),
 	  state_(AWAITING_HANDSHAKE) {}
 
-std::unique_ptr<TLVNode> CryptoConnBase::BuildSecureHandshake() {
+std::unique_ptr<TLVNode> CryptoPubConnBase::BuildSecureHandshake() {
 	std::string ephemeral_public_key;
 	CryptoUtil::GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
 
@@ -143,7 +143,7 @@ std::unique_ptr<TLVNode> CryptoConnBase::BuildSecureHandshake() {
 	return CryptoUtil::EncodeEncrypt(secret_key_, peer_public_key_, secure_handshake);
 }
 
-bool CryptoConnBase::HandleSecureHandshake(const TLVNode& node) {
+bool CryptoPubConnBase::HandleSecureHandshake(const TLVNode& node) {
 	assert(node.GetType() == TLV_TYPE_ENCRYPTED);
 
 	std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(secret_key_, peer_public_key_, node));
@@ -165,12 +165,12 @@ bool CryptoConnBase::HandleSecureHandshake(const TLVNode& node) {
 	return true;
 }
 
-void CryptoConnBase::OnReadable_(struct bufferevent* bev, void* this__) {
-	auto this_ = (CryptoConnBase*)this__;
+void CryptoPubConnBase::OnReadable_(struct bufferevent* bev, void* this__) {
+	auto this_ = (CryptoPubConnBase*)this__;
 	this_->OnReadable();
 }
 
-void CryptoConnBase::OnReadable() {
+void CryptoPubConnBase::OnReadable() {
 	char buf[UINT16_MAX];
 	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
 	const std::string input(buf, bytes);
@@ -249,7 +249,7 @@ void CryptoPubServer::Loop() {
 
 
 CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key)
-	: CryptoConnBase(secret_key) {
+	: CryptoPubConnBase(secret_key) {
 	bev_ = bev;
 }
 
@@ -315,7 +315,7 @@ void CryptoPubServerConnection::OnError(const short what) {
 
 
 CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates)
-	: CryptoConnBase(secret_key),
+	: CryptoPubConnBase(secret_key),
 	  event_base_(event_base_new()),
 		channel_bitrates_(channel_bitrates) {
 	bev_ = bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE);

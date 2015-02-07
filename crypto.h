@@ -26,9 +26,9 @@ class CryptoBase {
 		std::ostream& LogFatal(void *obj=nullptr);
 };
 
-class CryptoConnBase : public CryptoBase {
+class CryptoPubConnBase : public CryptoBase {
 	protected:
-		CryptoConnBase(const std::string& secret_key);
+		CryptoPubConnBase(const std::string& secret_key);
 
 		std::unique_ptr<TLVNode> BuildSecureHandshake();
 		bool HandleSecureHandshake(const TLVNode& node);
@@ -69,7 +69,7 @@ class CryptoPubServer : public CryptoBase {
 		const std::string secret_key_;
 };
 
-class CryptoPubServerConnection : public CryptoConnBase {
+class CryptoPubServerConnection : public CryptoPubConnBase {
 	public:
 		CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key);
 		~CryptoPubServerConnection();
@@ -86,7 +86,7 @@ class CryptoPubServerConnection : public CryptoConnBase {
 		friend CryptoPubServer;
 };
 
-class CryptoPubClient : public CryptoConnBase {
+class CryptoPubClient : public CryptoPubConnBase {
 	public:
 		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint64_t>& channel_bitrates);
 		~CryptoPubClient();
