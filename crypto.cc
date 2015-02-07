@@ -36,7 +36,7 @@ CryptoPubServer::CryptoPubServer(const std::string& secret_key)
 	server_addr.sin6_addr = in6addr_any;
 	server_addr.sin6_port = htons(4990);
 
-	listener_ = evconnlistener_new_bind(event_base_, &CryptoPubServer::OnNewConn, this, LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&server_addr, sizeof(server_addr));
+	listener_ = evconnlistener_new_bind(event_base_, &CryptoPubServer::OnNewConn_, this, LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
 CryptoPubServer::~CryptoPubServer() {
@@ -44,9 +44,12 @@ CryptoPubServer::~CryptoPubServer() {
 	event_base_free(event_base_);
 }
 
-void CryptoPubServer::OnNewConn(struct evconnlistener* listener, int client_fd, struct sockaddr* client_addr_, int client_addrlen, void* this__) {
+void CryptoPubServer::OnNewConn_(struct evconnlistener* listener, int client_fd, struct sockaddr* client_addr_, int client_addrlen, void* this__) {
 	auto this_ = (CryptoPubServer*)this__;
+	this_->OnNewConn(client_fd, client_addr_, client_addrlen);
+}
 
+void CryptoPubServer::OnNewConn(int client_fd, struct sockaddr* client_addr_, int client_addrlen) {
 	assert(client_addr_->sa_family == AF_INET6);
 	auto client_addr = (struct sockaddr_in6*)client_addr_;
 
@@ -54,11 +57,11 @@ void CryptoPubServer::OnNewConn(struct evconnlistener* listener, int client_fd, 
 	inet_ntop(AF_INET6, &client_addr->sin6_addr, buf, 128);
 	std::cerr << "New connection from [" << buf << "]:" << ntohs(client_addr->sin6_port) << std::endl;
 
-	auto bev = bufferevent_socket_new(this_->event_base_, client_fd, BEV_OPT_CLOSE_ON_FREE);
+	auto bev = bufferevent_socket_new(this->event_base_, client_fd, BEV_OPT_CLOSE_ON_FREE);
 	bufferevent_enable(bev, EV_READ);
 	bufferevent_disable(bev, EV_WRITE);
-	auto peer = new CryptoPubServerConnection(bev, this_->secret_key_);
-	bufferevent_setcb(bev, &CryptoPubServerConnection::OnReadable, NULL, &CryptoPubServerConnection::OnError, peer);
+	auto peer = new CryptoPubServerConnection(bev, this->secret_key_);
+	bufferevent_setcb(bev, &CryptoPubServerConnection::OnReadable_, NULL, &CryptoPubServerConnection::OnError_, peer);
 }
 
 void CryptoPubServer::Loop() {
@@ -77,17 +80,25 @@ CryptoPubServerConnection::~CryptoPubServerConnection() {
 	bufferevent_free(bev_);
 }
 
-void CryptoPubServerConnection::OnReadable(struct bufferevent* bev, void* this__) {
-	std::cerr << "OnReadable" << std::endl;
+void CryptoPubServerConnection::OnReadable_(struct bufferevent* bev, void* this__) {
 	auto this_ = (CryptoPubServerConnection*)this__;
-	char buf[128];
-	bufferevent_read(bev, buf, 128);
+	this_->OnReadable();
 }
 
-void CryptoPubServerConnection::OnError(struct bufferevent* bev, const short what, void* this__) {
-	std::cerr << "OnError" << std::endl;
+void CryptoPubServerConnection::OnReadable() {
+	std::cerr << "OnReadable" << std::endl;
+	char buf[128];
+	bufferevent_read(bev_, buf, 128);
+}
+
+void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {
 	auto this_ = (CryptoPubServerConnection*)this__;
-	delete this_;
+	this_->OnError(what);
+}
+
+void CryptoPubServerConnection::OnError(const short what) {
+	std::cerr << "OnError" << std::endl;
+	delete this;
 }
 
 

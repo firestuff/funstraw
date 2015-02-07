@@ -12,14 +12,35 @@ class CryptoBase {
 		static void GenKeyPair(std::string* secret_key, std::string* public_key);
 };
 
+class CryptoPubServerConnection;
+
+class CryptoPubServer : public CryptoBase {
+	public:
+		CryptoPubServer(const std::string& secret_key);
+		~CryptoPubServer();
+		void Loop();
+
+	private:
+		static void OnNewConn_(struct evconnlistener* listener, int fd, struct sockaddr* client_addr, int client_addrlen, void* this__);
+		void OnNewConn(int fd, struct sockaddr* client_addr, int client_addrlen);
+
+		struct event_base* event_base_;
+		struct evconnlistener* listener_;
+
+		const std::string secret_key_;
+};
+
 class CryptoPubServerConnection : public CryptoBase {
 	public:
 		CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key);
 		~CryptoPubServerConnection();
-		static void OnReadable(struct bufferevent* bev, void* this__);
-		static void OnError(struct bufferevent* bev, const short what, void* this__);
 
 	private:
+		static void OnReadable_(struct bufferevent* bev, void* this__);
+		void OnReadable();
+		static void OnError_(struct bufferevent* bev, const short what, void* this__);
+		void OnError(const short what);
+
 		struct bufferevent* bev_;
 
 		const std::string secret_key_;
@@ -29,27 +50,17 @@ class CryptoPubServerConnection : public CryptoBase {
 			AWAITING_HANDSHAKE,
 			READY,
 		} state_;
-};
 
-class CryptoPubServer : public CryptoBase {
-	public:
-		CryptoPubServer(const std::string& secret_key);
-		~CryptoPubServer();
-		static void OnNewConn(struct evconnlistener* listener, int fd, struct sockaddr* client_addr, int client_addrlen, void* this__);
-		void Loop();
-
-	private:
-		struct event_base* event_base_;
-		struct evconnlistener* listener_;
-
-		const std::string secret_key_;
+		friend CryptoPubServer;
 };
 
 class CryptoPubClient : public CryptoBase {
 	public:
 		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen);
 		~CryptoPubClient();
+
 		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port);
+
 		void Loop();
 
 	private:
