@@ -1,6 +1,6 @@
 all: auth-client auth-server gen-key gen-keypair
 
-%.o: %.cc
+%.o: %.cc *.h
 	g++ -I/usr/local/include -std=c++11 -c -o $@ $<
 
 auth-client: auth-client.o crypto.o tlv.o

@@ -28,7 +28,7 @@ void CryptoBase::GenKeyPair(std::string* secret_key, std::string* public_key) {
 }
 
 
-CryptoPubServer::CryptoPubServer(const std::string secret_key)
+CryptoPubServer::CryptoPubServer(const std::string& secret_key)
 	: secret_key_(secret_key),
 	  event_base_(event_base_new()) {
 	struct sockaddr_in6 server_addr = {0};
@@ -66,7 +66,7 @@ void CryptoPubServer::Loop() {
 }
 
 
-CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const std::string secret_key)
+CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key)
 	: bev_(bev),
 	  secret_key_(secret_key),
     state_(AWAITING_HANDSHAKE) {
@@ -88,4 +88,32 @@ void CryptoPubServerConnection::OnError(struct bufferevent* bev, const short wha
 	std::cerr << "OnError" << std::endl;
 	auto this_ = (CryptoPubServerConnection*)this__;
 	delete this_;
+}
+
+
+CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen)
+	: event_base_(event_base_new()),
+	  bev_(bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE)) {
+	bufferevent_socket_connect(bev_, addr, addrlen);
+}
+
+CryptoPubClient::~CryptoPubClient() {
+	bufferevent_free(bev_);
+	event_base_free(event_base_);
+}
+
+CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port) {
+	struct addrinfo* res;
+	int gai_ret = getaddrinfo(server_address.c_str(), server_port.c_str(), NULL, &res);
+	if (gai_ret) {
+		std::cerr << "Failed to resolve server_address: " << gai_strerror(gai_ret) << std::endl;
+		return nullptr;
+	}
+	auto ret = new CryptoPubClient((struct sockaddr*)res->ai_addr, res->ai_addrlen);
+	freeaddrinfo(res);
+	return ret;
+}
+
+void CryptoPubClient::Loop() {
+	event_base_dispatch(event_base_);
 }

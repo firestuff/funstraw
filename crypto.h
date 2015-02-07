@@ -14,7 +14,7 @@ class CryptoBase {
 
 class CryptoPubServerConnection : public CryptoBase {
 	public:
-		CryptoPubServerConnection(struct bufferevent* bev, const std::string secret_key);
+		CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key);
 		~CryptoPubServerConnection();
 		static void OnReadable(struct bufferevent* bev, void* this__);
 		static void OnError(struct bufferevent* bev, const short what, void* this__);
@@ -33,14 +33,26 @@ class CryptoPubServerConnection : public CryptoBase {
 
 class CryptoPubServer : public CryptoBase {
 	public:
-		CryptoPubServer(const std::string secret_key);
+		CryptoPubServer(const std::string& secret_key);
 		~CryptoPubServer();
 		static void OnNewConn(struct evconnlistener* listener, int fd, struct sockaddr* client_addr, int client_addrlen, void* this__);
 		void Loop();
 
 	private:
-		struct event_base *event_base_;
-		struct evconnlistener *listener_;
+		struct event_base* event_base_;
+		struct evconnlistener* listener_;
 
 		const std::string secret_key_;
+};
+
+class CryptoPubClient : public CryptoBase {
+	public:
+		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen);
+		~CryptoPubClient();
+		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port);
+		void Loop();
+
+	private:
+		struct event_base* event_base_;
+		struct bufferevent* bev_;
 };

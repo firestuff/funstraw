@@ -67,19 +67,6 @@ int main(int argc, char *argv[]) {
 		server_public_key_file >> server_public_key;
 	}
 
-	int fd;
-	{
-		struct addrinfo* res;
-		int ret = getaddrinfo(server_address.c_str(), server_port.c_str(), NULL, &res);
-		if (ret) {
-			std::cerr << "Failed to resolve server_address: " << gai_strerror(ret) << std::endl;
-			return 1;
-		}
-		fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (connect(fd, (struct sockaddr*)res->ai_addr, res->ai_addrlen)) {
-			perror("connect");
-			return 1;
-		}
-		freeaddrinfo(res);
-	}
+	auto client = CryptoPubClient::FromHostname(server_address, server_port);
+	client->Loop();
 }
