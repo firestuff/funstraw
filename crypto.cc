@@ -159,22 +159,48 @@ void CryptoPubServerConnection::OnReadable() {
 		// TODO: re-buffer?
 		return;
 	}
-	std::cerr << "successful decode" << std::endl;
+
 	auto client_public_key = decoded->FindChild(TLV_TYPE_PUBLIC_KEY);
-	if (!client_public_key || client_public_key->GetValue().length() != crypto_box_PUBLICKEYBYTES) {
-		std::cerr << "Wanted " << crypto_box_PUBLICKEYBYTES << ", got " << client_public_key->GetValue().length() << " bytes" << std::endl;
+	if (!client_public_key) {
+		std::cerr << "Protocol error (client handshake -- no public key)" << std::endl;
+		delete this;
+		return;
+	}
+	client_public_key_ = client_public_key->GetValue();
+	if (client_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
+		std::cerr << "Protocol error (client handshake -- wrong public key length)" << std::endl;
+		delete this;
 		return;
 	}
 	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
+		std::cerr << "Protocol error (client handshake -- no encrypted portion)" << std::endl;
+		delete this;
 		return;
 	}
 
 	std::unique_ptr<TLVNode> decrypted(DecryptDecode(secret_key_, client_public_key->GetValue(), *encrypted));
 	if (!decrypted.get()) {
+		std::cerr << "Protocol error (client handshake -- decryption failure)" << std::endl;
+		delete this;
 		return;
 	}
-	std::cerr << "successful decrypt" << std::endl;
+
+	auto client_ephemeral_public_key = decrypted->FindChild(TLV_TYPE_PUBLIC_KEY);
+	if (!client_ephemeral_public_key) {
+		std::cerr << "Protocol error (client handshake -- no ephemeral public key)" << std::endl;
+		delete this;
+		return;
+	}
+	client_ephemeral_public_key_ = client_ephemeral_public_key->GetValue();
+	if (client_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
+		std::cerr << "Protocol error (client handshake -- wrong ephemeral public key length)" << std::endl;
+		delete this;
+		return;
+	}
+
+	this->state_ = READY;
+	std::cerr << "Handshake successful" << std::endl;
 }
 
 void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {

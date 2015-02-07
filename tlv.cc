@@ -48,7 +48,6 @@ TLVNode* TLVNode::Decode(const std::string& input) {
 		return nullptr;
 	}
 	auto header = (struct header*)input.data();
-	std::cerr << "[type=" << htons(header->type) << ", value_length=" << htons(header->value_length) << "]" << std::endl;
 	if (input.length() < sizeof(*header) + htons(header->value_length)) {
 		return nullptr;
 	}
