@@ -21,6 +21,8 @@
 #define TLV_TYPE_ENCRYPTED               0x8000
 #define TLV_TYPE_CLIENT_HANDSHAKE        0x8001
 #define TLV_TYPE_CLIENT_HANDSHAKE_SECURE 0x8002
+#define TLV_TYPE_SERVER_HANDSHAKE        0x8001
+#define TLV_TYPE_SERVER_HANDSHAKE_SECURE 0x8002
 
 
 void CryptoBase::GenKey(std::string* key) {
@@ -125,7 +127,7 @@ void CryptoPubServer::OnNewConn(int client_fd, struct sockaddr* client_addr_, in
 
 	auto bev = bufferevent_socket_new(this->event_base_, client_fd, BEV_OPT_CLOSE_ON_FREE);
 	bufferevent_enable(bev, EV_READ);
-	bufferevent_disable(bev, EV_WRITE);
+	bufferevent_enable(bev, EV_WRITE);
 	auto peer = new CryptoPubServerConnection(bev, this->secret_key_);
 	bufferevent_setcb(bev, &CryptoPubServerConnection::OnReadable_, NULL, &CryptoPubServerConnection::OnError_, peer);
 }
@@ -199,6 +201,18 @@ void CryptoPubServerConnection::OnReadable() {
 		return;
 	}
 
+	std::string ephemeral_public_key;
+	GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
+
+	TLVNode handshake(TLV_TYPE_SERVER_HANDSHAKE);
+	TLVNode secure_handshake(TLV_TYPE_SERVER_HANDSHAKE_SECURE);
+	secure_handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, ephemeral_public_key));
+	EncodeEncryptAppend(secret_key_, client_public_key_, secure_handshake, &handshake);
+
+	std::string out;
+	handshake.Encode(&out);
+	bufferevent_write(bev_, out.data(), out.length());
+
 	this->state_ = READY;
 	std::cerr << "Handshake successful" << std::endl;
 }
@@ -217,7 +231,8 @@ CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const
 	: event_base_(event_base_new()),
 	  bev_(bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE)),
     secret_key_(secret_key),
-    server_public_key_(server_public_key) {
+    server_public_key_(server_public_key),
+	  state_(AWAITING_HANDSHAKE) {
 	assert(secret_key_.length() == crypto_box_SECRETKEYBYTES);
 	assert(server_public_key_.length() == crypto_box_PUBLICKEYBYTES);
 	DerivePublicKey(secret_key_, &public_key_);
@@ -251,7 +266,43 @@ void CryptoPubClient::OnReadable_(struct bufferevent* bev, void* this__) {
 }
 
 void CryptoPubClient::OnReadable() {
-	std::cerr << "OnReadable" << std::endl;
+	char buf[UINT16_MAX];
+	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
+	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(std::string(buf, bytes)));
+	if (!decoded.get()) {
+		// TODO: re-buffer?
+		return;
+	}
+
+	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
+	if (!encrypted) {
+		std::cerr << "Protocol error (server handshake -- no encrypted portion)" << std::endl;
+		delete this;
+		return;
+	}
+
+	std::unique_ptr<TLVNode> decrypted(DecryptDecode(secret_key_, server_public_key_, *encrypted));
+	if (!decrypted.get()) {
+		std::cerr << "Protocol error (server handshake -- decryption failure)" << std::endl;
+		delete this;
+		return;
+	}
+
+	auto server_ephemeral_public_key = decrypted->FindChild(TLV_TYPE_PUBLIC_KEY);
+	if (!server_ephemeral_public_key) {
+		std::cerr << "Protocol error (server handshake -- no ephemeral public key)" << std::endl;
+		delete this;
+		return;
+	}
+	server_ephemeral_public_key_ = server_ephemeral_public_key->GetValue();
+	if (server_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
+		std::cerr << "Protocol error (server handshake -- wrong ephemeral public key length)" << std::endl;
+		delete this;
+		return;
+	}
+
+	this->state_ = READY;
+	std::cerr << "Handshake successful" << std::endl;
 }
 
 void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short what, void* this__) {
@@ -262,6 +313,8 @@ void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short wha
 }
 
 void CryptoPubClient::OnConnect() {
+	std::cerr << "Connected to server" << std::endl;
+
 	std::string ephemeral_public_key;
 	GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
 

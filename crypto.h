@@ -49,9 +49,10 @@ class CryptoPubServerConnection : public CryptoBase {
 		struct bufferevent* bev_;
 
 		const std::string secret_key_;
-		const std::string ephemeral_secret_key_;
+		std::string ephemeral_secret_key_;
 		std::string client_public_key_;
 		std::string client_ephemeral_public_key_;
+
 		enum {
 			AWAITING_HANDSHAKE,
 			READY,
@@ -82,4 +83,10 @@ class CryptoPubClient : public CryptoBase {
 		const std::string server_public_key_;
 		std::string public_key_;
 		std::string ephemeral_secret_key_;
+		std::string server_ephemeral_public_key_;
+
+		enum {
+			AWAITING_HANDSHAKE,
+			READY,
+		} state_;
 };
