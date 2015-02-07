@@ -51,7 +51,7 @@ class CryptoPubServerConnection : public CryptoBase {
 	private:
 		static void OnReadable_(struct bufferevent* bev, void* this__);
 		void OnReadable();
-		void OnHandshake(const std::string& input);
+		void OnHandshake(const TLVNode& decoded);
 		static void OnError_(struct bufferevent* bev, const short what, void* this__);
 		void OnError(const short what);
 
@@ -82,7 +82,7 @@ class CryptoPubClient : public CryptoBase {
 	private:
 		static void OnReadable_(struct bufferevent* bev, void* this__);
 		void OnReadable();
-		void OnHandshake(const std::string& input);
+		void OnHandshake(const TLVNode& decoded);
 		static void OnConnectOrError_(struct bufferevent* bev, const short what, void* this__);
 		void OnConnect();
 		void OnError();

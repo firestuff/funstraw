@@ -194,21 +194,35 @@ void CryptoPubServerConnection::OnReadable() {
 	char buf[UINT16_MAX];
 	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
 	const std::string input(buf, bytes);
-
-	if (state_ == AWAITING_HANDSHAKE) {
-		OnHandshake(input);
-		return;
-	}
-}
-
-void CryptoPubServerConnection::OnHandshake(const std::string& input) {
 	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
+
 	if (!decoded.get()) {
 		// TODO: re-buffer?
 		return;
 	}
 
-	auto client_public_key = decoded->FindChild(TLV_TYPE_PUBLIC_KEY);
+	if (state_ == AWAITING_HANDSHAKE) {
+		OnHandshake(*decoded);
+		return;
+	}
+
+	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
+		LogFatal() << "Protocol error (unexpected message type)" << std::endl;
+		return;
+	}
+
+  std::unique_ptr<TLVNode> decrypted(DecryptDecode(ephemeral_secret_key_, client_ephemeral_public_key_, *decoded));
+	if (!decrypted.get()) {
+		LogFatal() << "Protocol error (decryption failure)" << std::endl;
+		return;
+	}
+
+	switch (decrypted->GetType()) {
+	}
+}
+
+void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
+	auto client_public_key = decoded.FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!client_public_key) {
 		LogFatal() << "Protocol error (client handshake -- no public key)" << std::endl;
 		return;
@@ -218,7 +232,7 @@ void CryptoPubServerConnection::OnHandshake(const std::string& input) {
 		LogFatal() << "Protocol error (client handshake -- wrong public key length)" << std::endl;
 		return;
 	}
-	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
+	auto encrypted = decoded.FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
 		LogFatal() << "Protocol error (client handshake -- no encrypted portion)" << std::endl;
 		return;
@@ -309,21 +323,35 @@ void CryptoPubClient::OnReadable() {
 	char buf[UINT16_MAX];
 	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
 	const std::string input(buf, bytes);
-
-	if (state_ == AWAITING_HANDSHAKE) {
-		OnHandshake(input);
-		return;
-	}
-}
-
-void CryptoPubClient::OnHandshake(const std::string& input) {
 	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
+
 	if (!decoded.get()) {
 		// TODO: re-buffer?
 		return;
 	}
 
-	auto encrypted = decoded->FindChild(TLV_TYPE_ENCRYPTED);
+	if (state_ == AWAITING_HANDSHAKE) {
+		OnHandshake(*decoded);
+		return;
+	}
+
+	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
+		LogFatal() << "Protocol error (unexpected message type)" << std::endl;
+		return;
+	}
+
+  std::unique_ptr<TLVNode> decrypted(DecryptDecode(ephemeral_secret_key_, server_ephemeral_public_key_, *decoded));
+	if (!decrypted.get()) {
+		LogFatal() << "Protocol error (decryption failure)" << std::endl;
+		return;
+	}
+
+	switch (decrypted->GetType()) {
+	}
+}
+
+void CryptoPubClient::OnHandshake(const TLVNode& decoded) {
+	auto encrypted = decoded.FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
 		LogFatal() << "Protocol error (server handshake -- no encrypted portion)" << std::endl;
 		return;
