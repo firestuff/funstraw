@@ -1,12 +1,4 @@
-#include <fstream>
-#include <iostream>
-
 #include <getopt.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 
 #include "crypto.h"
 
@@ -28,14 +20,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::string secret_key;
-	{
-		std::fstream secret_key_file(secret_key_filename, std::fstream::in);
-		if (secret_key_file.fail()) {
-			std::cerr << "Failed to open secret key file" << std::endl;
-			return 1;
-		}
-		secret_key_file >> secret_key;
-	}
+	CryptoBase::ReadKeyFromFile(secret_key_filename, &secret_key);
 
 	CryptoPubServer server(secret_key);
 	server.Loop();

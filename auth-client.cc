@@ -1,13 +1,4 @@
-#include <fstream>
-#include <iostream>
-
 #include <getopt.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 
 #include "crypto.h"
 
@@ -48,24 +39,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::string secret_key;
-	{
-		std::fstream secret_key_file(secret_key_filename, std::fstream::in);
-		if (secret_key_file.fail()) {
-			std::cerr << "Failed to open secret key file" << std::endl;
-			return 1;
-		}
-		secret_key_file >> secret_key;
-	}
+	CryptoBase::ReadKeyFromFile(secret_key_filename, &secret_key);
 
 	std::string server_public_key;
-	{
-		std::fstream server_public_key_file(server_public_key_filename, std::fstream::in);
-		if (server_public_key_file.fail()) {
-			std::cerr << "Failed to open server public key file" << std::endl;
-			return 1;
-		}
-		server_public_key_file >> server_public_key;
-	}
+	CryptoBase::ReadKeyFromFile(server_public_key_filename, &server_public_key);
 
 	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key);
 	client->Loop();

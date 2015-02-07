@@ -13,23 +13,8 @@ int main(int argc, char *argv[]) {
 	std::string secret_key, public_key;
 	CryptoBase::GenKeyPair(&secret_key, &public_key);
 
-	{
-		std::fstream secret_key_file(argv[1], std::fstream::out);
-		if (secret_key_file.fail()) {
-			std::cerr << "Failed to open secret key file" << std::endl;
-			return 1;
-		}
-		secret_key_file << secret_key;
-	}
-
-	{
-		std::fstream public_key_file(argv[2], std::fstream::out);
-		if (public_key_file.fail()) {
-			std::cerr << "Failed to open public key file" << std::endl;
-			return 1;
-		}
-		public_key_file << public_key;
-	}
+	CryptoBase::WriteKeyToFile(argv[1], secret_key);
+	CryptoBase::WriteKeyToFile(argv[2], public_key);
 
 	return 0;
 }

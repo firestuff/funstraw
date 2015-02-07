@@ -13,14 +13,7 @@ int main(int argc, char *argv[]) {
 	std::string key;
 	CryptoBase::GenKey(&key);
 
-	{
-		std::fstream key_file(argv[1], std::fstream::out);
-		if (key_file.fail()) {
-			std::cerr << "Failed to open key file" << std::endl;
-			return 1;
-		}
-		key_file << key;
-	}
+	CryptoBase::WriteKeyToFile(argv[1], key);
 
 	return 0;
 }

@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <cassert>
+#include <fstream>
 #include <iostream>
 
 #include <sodium/crypto_box.h>
@@ -44,6 +45,18 @@ void CryptoBase::DerivePublicKey(const std::string& secret_key, std::string* pub
 	unsigned char buf[crypto_box_PUBLICKEYBYTES];
 	assert(!crypto_scalarmult_base(buf, (const unsigned char*)secret_key.data()));
 	public_key->assign((char*)buf, crypto_box_PUBLICKEYBYTES);
+}
+
+void CryptoBase::ReadKeyFromFile(const std::string& filename, std::string* key) {
+	std::fstream key_file(filename, std::fstream::in);
+	assert(!key_file.fail());
+	key_file >> *key;
+}
+
+void CryptoBase::WriteKeyToFile(const std::string& filename, const std::string& key) {
+	std::fstream key_file(filename, std::fstream::out);
+	assert(!key_file.fail());
+	key_file << key;
 }
 
 void CryptoBase::EncodeEncryptAppend(const std::string& secret_key, const std::string& public_key, const TLVNode& input, TLVNode* container) {
