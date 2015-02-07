@@ -11,6 +11,9 @@
 #include <sodium/randombytes.h>
 
 #include "crypto.h"
+#include "tlv.h"
+
+#define TLV_TYPE_CLIENT_HANDSHAKE 0x8001
 
 
 void CryptoBase::GenKey(std::string* key) {
@@ -86,9 +89,9 @@ void CryptoPubServerConnection::OnReadable_(struct bufferevent* bev, void* this_
 }
 
 void CryptoPubServerConnection::OnReadable() {
-	std::cerr << "OnReadable" << std::endl;
 	char buf[128];
-	bufferevent_read(bev_, buf, 128);
+	int bytes = bufferevent_read(bev_, buf, 128);
+	std::cerr << "OnReadable: " << bytes << " bytes" << std::endl;
 }
 
 void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short what, void* this__) {
@@ -97,7 +100,6 @@ void CryptoPubServerConnection::OnError_(struct bufferevent* bev, const short wh
 }
 
 void CryptoPubServerConnection::OnError(const short what) {
-	std::cerr << "OnError" << std::endl;
 	delete this;
 }
 
@@ -105,6 +107,9 @@ void CryptoPubServerConnection::OnError(const short what) {
 CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen)
 	: event_base_(event_base_new()),
 	  bev_(bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE)) {
+	bufferevent_setcb(bev_, &CryptoPubClient::OnReadable_, NULL, &CryptoPubClient::OnConnectOrError_, this);
+	bufferevent_enable(bev_, EV_READ);
+	bufferevent_enable(bev_, EV_WRITE);
 	bufferevent_socket_connect(bev_, addr, addrlen);
 }
 
@@ -123,6 +128,29 @@ CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address
 	auto ret = new CryptoPubClient((struct sockaddr*)res->ai_addr, res->ai_addrlen);
 	freeaddrinfo(res);
 	return ret;
+}
+
+void CryptoPubClient::OnReadable_(struct bufferevent* bev, void* this__) {
+	auto this_ = (CryptoPubClient*)this__;
+	this_->OnReadable();
+}
+
+void CryptoPubClient::OnReadable() {
+	std::cerr << "OnReadable" << std::endl;
+}
+
+void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short what, void* this__) {
+	auto this_ = (CryptoPubClient*)this__;
+	if (what == BEV_EVENT_CONNECTED) {
+		this_->OnConnect();
+	}
+}
+
+void CryptoPubClient::OnConnect() {
+	TLVNode handshake(TLV_TYPE_CLIENT_HANDSHAKE);
+	std::string out;
+	handshake.Encode(&out);
+	bufferevent_write(bev_, out.data(), out.length());
 }
 
 void CryptoPubClient::Loop() {

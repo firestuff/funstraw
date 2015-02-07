@@ -64,6 +64,11 @@ class CryptoPubClient : public CryptoBase {
 		void Loop();
 
 	private:
+		static void OnReadable_(struct bufferevent* bev, void* this__);
+		void OnReadable();
+		static void OnConnectOrError_(struct bufferevent* bev, const short what, void* this__);
+		void OnConnect();
+
 		struct event_base* event_base_;
 		struct bufferevent* bev_;
 };
