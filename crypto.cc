@@ -123,16 +123,20 @@ std::ostream& CryptoBase::Log(void *obj) {
 	return std::cerr << buf;
 }
 
-std::ostream& CryptoBase::LogFatal(void *obj) {
-	std::ostream& ret = Log(obj);
-	delete this;
-	return ret;
-}
-
 
 CryptoPubConnBase::CryptoPubConnBase(const std::string& secret_key)
 	: secret_key_(secret_key),
 	  state_(AWAITING_HANDSHAKE) {}
+
+CryptoPubConnBase::~CryptoPubConnBase() {
+	bufferevent_free(bev_);
+}
+
+void CryptoPubConnBase::LogFatal(const std::string& msg, void *obj) {
+	Log(obj) << msg << std::endl;
+	delete this;
+	return;
+}
 
 std::unique_ptr<TLVNode> CryptoPubConnBase::BuildSecureHandshake() {
 	std::string ephemeral_public_key;
@@ -148,18 +152,18 @@ bool CryptoPubConnBase::HandleSecureHandshake(const TLVNode& node) {
 
 	std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(secret_key_, peer_public_key_, node));
 	if (!decrypted.get()) {
-		LogFatal() << "Protocol error (handshake; decryption failure)" << std::endl;
+		LogFatal("Protocol error (handshake; decryption failure)");
 		return false;
 	}
 
 	auto peer_ephemeral_public_key = decrypted->FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!peer_ephemeral_public_key) {
-		LogFatal() << "Protocol error (handshake; no ephemeral public key)" << std::endl;
+		LogFatal("Protocol error (handshake; no ephemeral public key)");
 		return false;
 	}
 	peer_ephemeral_public_key_ = peer_ephemeral_public_key->GetValue();
 	if (peer_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
-		LogFatal() << "Protocol error (handshake; wrong ephemeral public key length)" << std::endl;
+		LogFatal("Protocol error (handshake; wrong ephemeral public key length)");
 		return false;
 	}
 	return true;
@@ -194,18 +198,18 @@ void CryptoPubConnBase::OnReadable() {
 	}
 
 	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
-		LogFatal() << "Protocol error (wrong message type)" << std::endl;
+		LogFatal("Protocol error (wrong message type)");
 		return;
 	}
 
 	std::unique_ptr<TLVNode> decrypted(CryptoUtil::DecryptDecode(ephemeral_secret_key_, peer_ephemeral_public_key_, *decoded));
 	if (!decrypted.get()) {
-		LogFatal() << "Protocol error (decryption failure)" << std::endl;
+		LogFatal("Protocol error (decryption failure)");
 		return;
 	}
 
 	if (!OnMessage(*decrypted)) {
-		LogFatal() << "Protocol error (message handling)" << std::endl;
+		LogFatal("Protocol error (message handling)");
 		return;
 	}
 }
@@ -262,28 +266,27 @@ CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, co
 
 CryptoPubServerConnection::~CryptoPubServerConnection() {
 	Log() << "Connection closed" << std::endl;
-	bufferevent_free(bev_);
 }
 
 void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
 	if (decoded.GetType() != TLV_TYPE_HANDSHAKE) {
-		LogFatal() << "Protocol error (client handshake -- wrong message type)" << std::endl;
+		LogFatal("Protocol error (client handshake -- wrong message type)");
 		return;
 	}
 
 	auto peer_public_key = decoded.FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!peer_public_key) {
-		LogFatal() << "Protocol error (client handshake -- no public key)" << std::endl;
+		LogFatal("Protocol error (client handshake -- no public key)");
 		return;
 	}
 	peer_public_key_ = peer_public_key->GetValue();
 	if (peer_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
-		LogFatal() << "Protocol error (client handshake -- wrong public key length)" << std::endl;
+		LogFatal("Protocol error (client handshake -- wrong public key length)");
 		return;
 	}
 	auto encrypted = decoded.FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
-		LogFatal() << "Protocol error (client handshake -- no encrypted portion)" << std::endl;
+		LogFatal("Protocol error (client handshake -- no encrypted portion)");
 		return;
 	}
 
@@ -337,7 +340,6 @@ CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const
 }
 
 CryptoPubClient::~CryptoPubClient() {
-	bufferevent_free(bev_);
 	event_base_free(event_base_);
 }
 

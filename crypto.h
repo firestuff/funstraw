@@ -21,14 +21,16 @@ class CryptoUtil {
 };
 
 class CryptoBase {
-	public:
+	protected:
 		std::ostream& Log(void *obj=nullptr);
-		std::ostream& LogFatal(void *obj=nullptr);
 };
 
 class CryptoPubConnBase : public CryptoBase {
 	protected:
 		CryptoPubConnBase(const std::string& secret_key);
+		virtual ~CryptoPubConnBase();
+
+		void LogFatal(const std::string& msg, void *obj=nullptr);
 
 		std::unique_ptr<TLVNode> BuildSecureHandshake();
 		bool HandleSecureHandshake(const TLVNode& node);
