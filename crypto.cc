@@ -22,8 +22,8 @@
 #define TLV_TYPE_ENCRYPTED               0x8000
 #define TLV_TYPE_CLIENT_HANDSHAKE        0x8001
 #define TLV_TYPE_CLIENT_HANDSHAKE_SECURE 0x8002
-#define TLV_TYPE_SERVER_HANDSHAKE        0x8001
-#define TLV_TYPE_SERVER_HANDSHAKE_SECURE 0x8002
+#define TLV_TYPE_SERVER_HANDSHAKE        0x8003
+#define TLV_TYPE_SERVER_HANDSHAKE_SECURE 0x8004
 
 
 std::string CryptoBase::BinToHex(const std::string& bin) {
@@ -207,7 +207,7 @@ void CryptoPubServerConnection::OnReadable() {
 	}
 
 	if (decoded->GetType() != TLV_TYPE_ENCRYPTED) {
-		LogFatal() << "Protocol error (unexpected message type)" << std::endl;
+		LogFatal() << "Protocol error (wrong message type)" << std::endl;
 		return;
 	}
 
@@ -222,6 +222,11 @@ void CryptoPubServerConnection::OnReadable() {
 }
 
 void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
+	if (decoded.GetType() != TLV_TYPE_CLIENT_HANDSHAKE) {
+		LogFatal() << "Protocol error (client handshake -- wrong message type)" << std::endl;
+		return;
+	}
+
 	auto client_public_key = decoded.FindChild(TLV_TYPE_PUBLIC_KEY);
 	if (!client_public_key) {
 		LogFatal() << "Protocol error (client handshake -- no public key)" << std::endl;
@@ -351,6 +356,11 @@ void CryptoPubClient::OnReadable() {
 }
 
 void CryptoPubClient::OnHandshake(const TLVNode& decoded) {
+	if (decoded.GetType() != TLV_TYPE_SERVER_HANDSHAKE) {
+		LogFatal() << "Protocol error (server handshake -- wrong message type)" << std::endl;
+		return;
+	}
+
 	auto encrypted = decoded.FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
 		LogFatal() << "Protocol error (server handshake -- no encrypted portion)" << std::endl;
