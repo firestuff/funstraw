@@ -182,7 +182,16 @@ void CryptoPubServerConnection::OnReadable_(struct bufferevent* bev, void* this_
 void CryptoPubServerConnection::OnReadable() {
 	char buf[UINT16_MAX];
 	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
-	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(std::string(buf, bytes)));
+	const std::string input(buf, bytes);
+
+	if (state_ == AWAITING_HANDSHAKE) {
+		OnHandshake(input);
+		return;
+	}
+}
+
+void CryptoPubServerConnection::OnHandshake(const std::string& input) {
+	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
 	if (!decoded.get()) {
 		// TODO: re-buffer?
 		return;
@@ -288,7 +297,16 @@ void CryptoPubClient::OnReadable_(struct bufferevent* bev, void* this__) {
 void CryptoPubClient::OnReadable() {
 	char buf[UINT16_MAX];
 	int bytes = bufferevent_read(bev_, buf, UINT16_MAX);
-	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(std::string(buf, bytes)));
+	const std::string input(buf, bytes);
+
+	if (state_ == AWAITING_HANDSHAKE) {
+		OnHandshake(input);
+		return;
+	}
+}
+
+void CryptoPubClient::OnHandshake(const std::string& input) {
+	std::unique_ptr<TLVNode> decoded(TLVNode::Decode(input));
 	if (!decoded.get()) {
 		// TODO: re-buffer?
 		return;
