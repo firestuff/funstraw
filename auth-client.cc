@@ -46,11 +46,11 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	std::string secret_key;
-	CryptoUtil::ReadKeyFromFile(secret_key_filename, &secret_key);
+	SecretKey secret_key;
+	secret_key.ReadFromFile(secret_key_filename);
 
-	std::string server_public_key;
-	CryptoUtil::ReadKeyFromFile(server_public_key_filename, &server_public_key);
+	PublicKey server_public_key;
+	server_public_key.ReadFromFile(server_public_key_filename);
 
 	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key, channel_bitrates);
 	client->Loop();

@@ -1,7 +1,11 @@
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <signal.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <cassert>
@@ -12,6 +16,7 @@
 #include <sodium/crypto_secretbox.h>
 #include <sodium/crypto_scalarmult.h>
 #include <sodium/randombytes.h>
+#include <sodium/utils.h>
 
 #include "crypto.h"
 
@@ -28,54 +33,23 @@
 #define TLV_TYPE_CHANNEL                 0x8004
 
 
-std::string CryptoUtil::BinToHex(const std::string& bin) {
-	static const char hex[] = "0123456789abcdef";
-	std::string ret;
-	ret.reserve(bin.length() * 2);
-	for (int i = 0; i < bin.length(); i++) {
-		ret.push_back(hex[(bin[i] & 0xf0) >> 4]);
-		ret.push_back(hex[bin[i] & 0x0f]);
-	}
-	return ret;
+void CryptoUtil::GenKey(SharedKey* key) {
+	randombytes_buf(key->MutableKey(), crypto_secretbox_KEYBYTES);
+	key->MarkSet();
 }
 
-void CryptoUtil::GenKey(std::string* key) {
-	unsigned char buf[crypto_secretbox_KEYBYTES];
-	randombytes_buf(buf, crypto_secretbox_KEYBYTES);
-	key->assign((char*)buf, crypto_secretbox_KEYBYTES);
+void CryptoUtil::GenKeyPair(SecretKey* secret_key, PublicKey* public_key) {
+	assert(!crypto_box_keypair(public_key->MutableKey(), secret_key->MutableKey()));
+	public_key->MarkSet();
+	secret_key->MarkSet();
 }
 
-void CryptoUtil::GenKeyPair(std::string* secret_key, std::string* public_key) {
-	unsigned char public_key_buf[crypto_box_PUBLICKEYBYTES];
-	unsigned char secret_key_buf[crypto_box_PUBLICKEYBYTES];
-	assert(crypto_box_keypair(public_key_buf, secret_key_buf) == 0);
-	public_key->assign((char*)public_key_buf, crypto_box_PUBLICKEYBYTES);
-	secret_key->assign((char*)secret_key_buf, crypto_box_SECRETKEYBYTES);
+void CryptoUtil::DerivePublicKey(const SecretKey& secret_key, PublicKey* public_key) {
+	assert(!crypto_scalarmult_base(public_key->MutableKey(), secret_key.Key()));
+	public_key->MarkSet();
 }
 
-void CryptoUtil::DerivePublicKey(const std::string& secret_key, std::string* public_key) {
-	assert(secret_key.length() == crypto_box_SECRETKEYBYTES);
-	unsigned char buf[crypto_box_PUBLICKEYBYTES];
-	assert(!crypto_scalarmult_base(buf, (const unsigned char*)secret_key.data()));
-	public_key->assign((char*)buf, crypto_box_PUBLICKEYBYTES);
-}
-
-void CryptoUtil::ReadKeyFromFile(const std::string& filename, std::string* key) {
-	std::fstream key_file(filename, std::fstream::in);
-	assert(!key_file.fail());
-	key_file >> *key;
-}
-
-void CryptoUtil::WriteKeyToFile(const std::string& filename, const std::string& key) {
-	std::fstream key_file(filename, std::fstream::out);
-	assert(!key_file.fail());
-	key_file << key;
-}
-
-std::unique_ptr<TLVNode> CryptoUtil::EncodeEncrypt(const std::string& secret_key, const std::string& public_key, const TLVNode& input) {
-	assert(secret_key.length() == crypto_box_SECRETKEYBYTES);
-	assert(public_key.length() == crypto_box_PUBLICKEYBYTES);
-
+std::unique_ptr<TLVNode> CryptoUtil::EncodeEncrypt(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input) {
 	std::string encoded;
 	input.Encode(&encoded);
 
@@ -85,7 +59,7 @@ std::unique_ptr<TLVNode> CryptoUtil::EncodeEncrypt(const std::string& secret_key
 	randombytes_buf(nonce, crypto_box_NONCEBYTES);
 
 	unsigned char output[encrypted_bytes];
-	assert(!crypto_box_easy(output, (const unsigned char*)encoded.data(), encoded.length(), nonce, (const unsigned char*)public_key.data(), (const unsigned char*)secret_key.data()));
+	assert(!crypto_box_easy(output, (const unsigned char*)encoded.data(), encoded.length(), nonce, public_key.Key(), secret_key.Key()));
 
 	std::unique_ptr<TLVNode> encrypted(new TLVNode(TLV_TYPE_ENCRYPTED));
 	encrypted->AppendChild(new TLVNode(TLV_TYPE_NONCE, std::string((char*)nonce, crypto_box_NONCEBYTES)));
@@ -94,9 +68,7 @@ std::unique_ptr<TLVNode> CryptoUtil::EncodeEncrypt(const std::string& secret_key
 	return encrypted;
 }
 
-std::unique_ptr<TLVNode> CryptoUtil::DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input) {
-	assert(secret_key.length() == crypto_box_SECRETKEYBYTES);
-	assert(public_key.length() == crypto_box_PUBLICKEYBYTES);
+std::unique_ptr<TLVNode> CryptoUtil::DecryptDecode(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input) {
 	assert(input.GetType() == TLV_TYPE_ENCRYPTED);
 
 	auto nonce = input.FindChild(TLV_TYPE_NONCE);
@@ -111,12 +83,93 @@ std::unique_ptr<TLVNode> CryptoUtil::DecryptDecode(const std::string& secret_key
 	size_t decrypted_bytes = encrypted->GetValue().length() - crypto_box_MACBYTES;
 
 	unsigned char output[decrypted_bytes];
-	if (crypto_box_open_easy(output, (const unsigned char*)encrypted->GetValue().data(), encrypted->GetValue().length(), (const unsigned char*)nonce->GetValue().data(), (const unsigned char*)public_key.data(), (const unsigned char*)secret_key.data())) {
+	if (crypto_box_open_easy(output, (const unsigned char*)encrypted->GetValue().data(), encrypted->GetValue().length(), (const unsigned char*)nonce->GetValue().data(), public_key.Key(), secret_key.Key())) {
 		return nullptr;
 	}
 
 	return TLVNode::Decode(std::string((char*)output, decrypted_bytes));
 }
+
+
+CryptoKey::CryptoKey(const size_t key_bytes)
+	: key_bytes_(key_bytes),
+    is_set_(false),
+    key_((unsigned char*)sodium_malloc(key_bytes)) {
+	assert(key_);
+}
+
+CryptoKey::~CryptoKey() {
+	sodium_free(key_);
+}
+
+void CryptoKey::WriteToFile(const std::string& filename) const {
+	assert(is_set_);
+	int fd = open(filename.c_str(), O_WRONLY);
+	assert(fd != -1);
+	assert(write(fd, key_, key_bytes_) == key_bytes_);
+	assert(!close(fd));
+}
+
+void CryptoKey::ReadFromFile(const std::string& filename) {
+	assert(!is_set_);
+	int fd = open(filename.c_str(), O_RDONLY);
+	assert(fd != -1);
+	assert(read(fd, key_, key_bytes_ + 1) == key_bytes_);
+	assert(!close(fd));
+	MarkSet();
+}
+
+const unsigned char* CryptoKey::Key() const {
+	assert(is_set_);
+	return key_;
+}
+
+unsigned char* CryptoKey::MutableKey() {
+	assert(!is_set_);
+	return key_;
+}
+
+void CryptoKey::MarkSet() {
+	assert(!is_set_);
+	is_set_ = true;
+	assert(!sodium_mprotect_readonly(key_));
+}
+
+
+SharedKey::SharedKey()
+	: CryptoKey(crypto_secretbox_KEYBYTES) {}
+
+
+SecretKey::SecretKey()
+	: CryptoKey(crypto_box_SECRETKEYBYTES) {}
+
+
+PublicKey::PublicKey()
+	: CryptoKey(crypto_box_PUBLICKEYBYTES) {}
+
+std::string PublicKey::AsString() const {
+	assert(is_set_);
+	return std::string((char*)key_, key_bytes_);
+}
+
+std::string PublicKey::ToHex() const {
+	static const char hex[] = "0123456789abcdef";
+	std::string ret;
+	ret.reserve(key_bytes_ * 2);
+	for (int i = 0; i < key_bytes_; i++) {
+		ret.push_back(hex[(key_[i] & 0xf0) >> 4]);
+		ret.push_back(hex[key_[i] & 0x0f]);
+	}
+	return ret;
+}
+
+void PublicKey::FromString(const std::string& str) {
+	assert(!is_set_);
+	assert(str.length() == key_bytes_);
+	memcpy(key_, str.data(), key_bytes_);
+	MarkSet();
+}
+
 
 std::ostream& CryptoBase::Log(void *obj) {
 	char buf[64];
@@ -125,7 +178,7 @@ std::ostream& CryptoBase::Log(void *obj) {
 }
 
 
-CryptoPubConnBase::CryptoPubConnBase(const std::string& secret_key)
+CryptoPubConnBase::CryptoPubConnBase(const SecretKey& secret_key)
 	: secret_key_(secret_key),
 	  state_(AWAITING_HANDSHAKE) {}
 
@@ -140,11 +193,11 @@ void CryptoPubConnBase::LogFatal(const std::string& msg, void *obj) {
 }
 
 std::unique_ptr<TLVNode> CryptoPubConnBase::BuildSecureHandshake() {
-	std::string ephemeral_public_key;
+	PublicKey ephemeral_public_key;
 	CryptoUtil::GenKeyPair(&ephemeral_secret_key_, &ephemeral_public_key);
 
 	TLVNode secure_handshake(TLV_TYPE_HANDSHAKE_SECURE);
-	secure_handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, ephemeral_public_key));
+	secure_handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, ephemeral_public_key.AsString()));
 	return CryptoUtil::EncodeEncrypt(secret_key_, peer_public_key_, secure_handshake);
 }
 
@@ -162,11 +215,11 @@ bool CryptoPubConnBase::HandleSecureHandshake(const TLVNode& node) {
 		LogFatal("Protocol error (handshake; no ephemeral public key)");
 		return false;
 	}
-	peer_ephemeral_public_key_ = peer_ephemeral_public_key->GetValue();
-	if (peer_ephemeral_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
+	if (peer_ephemeral_public_key->GetValue().length() != crypto_box_PUBLICKEYBYTES) {
 		LogFatal("Protocol error (handshake; wrong ephemeral public key length)");
 		return false;
 	}
+	peer_ephemeral_public_key_.FromString(peer_ephemeral_public_key->GetValue());
 	return true;
 }
 
@@ -216,13 +269,11 @@ void CryptoPubConnBase::OnReadable() {
 }
 
 
-CryptoPubServer::CryptoPubServer(const std::string& secret_key)
+CryptoPubServer::CryptoPubServer(const SecretKey& secret_key)
 	: secret_key_(secret_key),
 	  event_base_(event_base_new()) {
 	auto signal_event = evsignal_new(event_base_, SIGINT, &CryptoPubServer::Shutdown_, this);
 	event_add(signal_event, NULL);
-
-	assert(secret_key_.length() == crypto_box_SECRETKEYBYTES);
 
 	struct sockaddr_in6 server_addr = {0};
 	server_addr.sin6_family = AF_INET6;
@@ -272,7 +323,7 @@ void CryptoPubServer::Shutdown() {
 }
 
 
-CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key)
+CryptoPubServerConnection::CryptoPubServerConnection(struct bufferevent* bev, const SecretKey& secret_key)
 	: CryptoPubConnBase(secret_key) {
 	bev_ = bev;
 }
@@ -292,11 +343,11 @@ void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
 		LogFatal("Protocol error (client handshake -- no public key)");
 		return;
 	}
-	peer_public_key_ = peer_public_key->GetValue();
-	if (peer_public_key_.length() != crypto_box_PUBLICKEYBYTES) {
+	if (peer_public_key->GetValue().length() != crypto_box_PUBLICKEYBYTES) {
 		LogFatal("Protocol error (client handshake -- wrong public key length)");
 		return;
 	}
+	peer_public_key_.FromString(peer_public_key->GetValue());
 	auto encrypted = decoded.FindChild(TLV_TYPE_ENCRYPTED);
 	if (!encrypted) {
 		LogFatal("Protocol error (client handshake -- no encrypted portion)");
@@ -310,7 +361,7 @@ void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
 	SendHandshake();
 
 	this->state_ = READY;
-	Log() << "Handshake successful (client ID: " << CryptoUtil::BinToHex(peer_public_key_) << ")" << std::endl;
+	Log() << "Handshake successful (client ID: " << peer_public_key_.ToHex() << ")" << std::endl;
 }
 
 bool CryptoPubServerConnection::OnMessage(const TLVNode& message) {
@@ -350,14 +401,12 @@ void CryptoPubServerConnection::OnError(const short what) {
 }
 
 
-CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates)
+CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates)
 	: CryptoPubConnBase(secret_key),
 	  event_base_(event_base_new()),
 		channel_bitrates_(channel_bitrates) {
 	bev_ = bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE);
-	peer_public_key_ = server_public_key;
-	assert(secret_key_.length() == crypto_box_SECRETKEYBYTES);
-	assert(peer_public_key_.length() == crypto_box_PUBLICKEYBYTES);
+	peer_public_key_.FromString(server_public_key.AsString());
 
 	bufferevent_setcb(bev_, &CryptoPubClient::OnReadable_, NULL, &CryptoPubClient::OnConnectOrError_, this);
 	bufferevent_enable(bev_, EV_READ);
@@ -369,7 +418,7 @@ CryptoPubClient::~CryptoPubClient() {
 	event_base_free(event_base_);
 }
 
-CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates) {
+CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates) {
 	struct addrinfo* res;
 	int gai_ret = getaddrinfo(server_address.c_str(), server_port.c_str(), NULL, &res);
 	if (gai_ret) {
@@ -417,9 +466,9 @@ void CryptoPubClient::SendHandshake() {
 	auto secure_handshake = BuildSecureHandshake();
 
 	TLVNode handshake(TLV_TYPE_HANDSHAKE);
-	std::string public_key;
+	PublicKey public_key;
 	CryptoUtil::DerivePublicKey(secret_key_, &public_key);
-	handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, public_key));
+	handshake.AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, public_key.AsString()));
 	handshake.AppendChild(secure_handshake.release());
 
 	std::string out;

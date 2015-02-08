@@ -10,11 +10,12 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	std::string secret_key, public_key;
+	SecretKey secret_key;
+	PublicKey public_key;
 	CryptoUtil::GenKeyPair(&secret_key, &public_key);
 
-	CryptoUtil::WriteKeyToFile(argv[1], secret_key);
-	CryptoUtil::WriteKeyToFile(argv[2], public_key);
+	secret_key.WriteToFile(argv[1]);
+	public_key.WriteToFile(argv[2]);
 
 	return 0;
 }

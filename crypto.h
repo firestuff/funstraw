@@ -1,23 +1,57 @@
 #include <event2/bufferevent.h>
 #include <event2/event.h>
 #include <event2/listener.h>
+#include <sodium/core.h>
 
 #include <string>
 
 #include "tlv.h"
 
+class CryptoKey {
+	public:
+		CryptoKey(const size_t key_bytes);
+		~CryptoKey();
+		void ReadFromFile(const std::string& filename);
+		void WriteToFile(const std::string& filename) const;
+
+		const unsigned char* Key() const;
+
+		unsigned char* MutableKey();
+		void MarkSet();
+
+	protected:
+		unsigned char* const key_;
+		bool is_set_;
+		const size_t key_bytes_;
+};
+
+class SharedKey : public CryptoKey {
+	public:
+		SharedKey();
+};
+
+class SecretKey : public CryptoKey {
+	public:
+		SecretKey();
+};
+
+class PublicKey : public CryptoKey {
+	public:
+		PublicKey();
+
+		std::string AsString() const;
+		std::string ToHex() const;
+		void FromString(const std::string& str);
+};
+
 class CryptoUtil {
 	public:
-		static std::string BinToHex(const std::string& bin);
+		static void GenKey(SharedKey* key);
+		static void GenKeyPair(SecretKey* secret_key, PublicKey* public_key);
+		static void DerivePublicKey(const SecretKey& secret_key, PublicKey* public_key);
 
-		static void GenKey(std::string* key);
-		static void GenKeyPair(std::string* secret_key, std::string* public_key);
-		static void DerivePublicKey(const std::string& secret_key, std::string* public_key);
-		static void ReadKeyFromFile(const std::string& filename, std::string* key);
-		static void WriteKeyToFile(const std::string& filename, const std::string& key);
-
-		static std::unique_ptr<TLVNode> EncodeEncrypt(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
-		static std::unique_ptr<TLVNode> DecryptDecode(const std::string& secret_key, const std::string& public_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> EncodeEncrypt(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> DecryptDecode(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input);
 };
 
 class CryptoBase {
@@ -27,7 +61,7 @@ class CryptoBase {
 
 class CryptoPubConnBase : public CryptoBase {
 	protected:
-		CryptoPubConnBase(const std::string& secret_key);
+		CryptoPubConnBase(const SecretKey& secret_key);
 		virtual ~CryptoPubConnBase();
 
 		void LogFatal(const std::string& msg, void *obj=nullptr);
@@ -48,17 +82,17 @@ class CryptoPubConnBase : public CryptoBase {
 
 		struct bufferevent* bev_;
 
-		const std::string secret_key_;
-		std::string peer_public_key_;
-		std::string ephemeral_secret_key_;
-		std::string peer_ephemeral_public_key_;
+		const SecretKey& secret_key_;
+		PublicKey peer_public_key_;
+		SecretKey ephemeral_secret_key_;
+		PublicKey peer_ephemeral_public_key_;
 };
 
 class CryptoPubServerConnection;
 
 class CryptoPubServer : public CryptoBase {
 	public:
-		CryptoPubServer(const std::string& secret_key);
+		CryptoPubServer(const SecretKey& secret_key);
 		~CryptoPubServer();
 		void Loop();
 		void Shutdown();
@@ -72,12 +106,12 @@ class CryptoPubServer : public CryptoBase {
 		struct event_base* event_base_;
 		struct evconnlistener* listener_;
 
-		const std::string secret_key_;
+		const SecretKey& secret_key_;
 };
 
 class CryptoPubServerConnection : public CryptoPubConnBase {
 	public:
-		CryptoPubServerConnection(struct bufferevent* bev, const std::string& secret_key);
+		CryptoPubServerConnection(struct bufferevent* bev, const SecretKey& secret_key);
 		~CryptoPubServerConnection();
 
 	private:
@@ -95,10 +129,10 @@ class CryptoPubServerConnection : public CryptoPubConnBase {
 
 class CryptoPubClient : public CryptoPubConnBase {
 	public:
-		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates);
+		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates);
 		~CryptoPubClient();
 
-		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const std::string& secret_key, const std::string& server_public_key, const std::list<uint32_t>& channel_bitrates);
+		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates);
 
 		void Loop();
 

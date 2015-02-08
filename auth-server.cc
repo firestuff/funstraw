@@ -21,8 +21,10 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	std::string secret_key;
-	CryptoUtil::ReadKeyFromFile(secret_key_filename, &secret_key);
+	sodium_init();
+
+	SecretKey secret_key;
+	secret_key.ReadFromFile(secret_key_filename);
 
 	CryptoPubServer server(secret_key);
 	server.Loop();

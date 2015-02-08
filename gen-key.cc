@@ -10,10 +10,10 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	std::string key;
+	SharedKey key;
 	CryptoUtil::GenKey(&key);
 
-	CryptoUtil::WriteKeyToFile(argv[1], key);
+	key.WriteToFile(argv[1]);
 
 	return 0;
 }
