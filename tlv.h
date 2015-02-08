@@ -18,6 +18,7 @@ class TLVNode {
 		bool IsContainer() const;
 		uint16_t GetType() const;
 		const std::string& GetValue() const;
+		const std::list<TLVNode*>& GetChildren() const;
 
 	private:
 		const uint16_t type_;

@@ -105,3 +105,8 @@ const std::string& TLVNode::GetValue() const {
 	assert(!this->IsContainer());
 	return value_;
 }
+
+const std::list<TLVNode*>& TLVNode::GetChildren() const {
+	assert(this->IsContainer());
+	return children_;
+}

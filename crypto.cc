@@ -302,9 +302,22 @@ void CryptoPubServerConnection::OnHandshake(const TLVNode& decoded) {
 
 bool CryptoPubServerConnection::OnMessage(const TLVNode& message) {
 	switch (message.GetType()) {
+		case TLV_TYPE_TUNNEL_REQUEST:
+			return OnTunnelRequest(message);
 		default:
 			return false;
 	}
+}
+
+bool CryptoPubServerConnection::OnTunnelRequest(const TLVNode& message) {
+	Log() << "New tunnel request" << std::endl;
+	for (auto child : message.GetChildren()) {
+		if (child->GetType() != TLV_TYPE_CHANNEL) {
+			continue;
+		}
+		Log() << "Channel" << std::endl;
+	}
+	return true;
 }
 
 void CryptoPubServerConnection::SendHandshake() {

@@ -80,6 +80,7 @@ class CryptoPubServerConnection : public CryptoPubConnBase {
 	private:
 		void OnHandshake(const TLVNode& decoded);
 		bool OnMessage(const TLVNode& node);
+		bool OnTunnelRequest(const TLVNode& node);
 
 		static void OnError_(struct bufferevent* bev, const short what, void* this__);
 		void OnError(const short what);
