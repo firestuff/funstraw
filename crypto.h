@@ -61,8 +61,11 @@ class CryptoPubServer : public CryptoBase {
 		CryptoPubServer(const std::string& secret_key);
 		~CryptoPubServer();
 		void Loop();
+		void Shutdown();
 
 	private:
+		static void Shutdown_(evutil_socket_t sig, short events, void *this__);
+
 		static void OnNewConn_(struct evconnlistener* listener, int fd, struct sockaddr* client_addr, int client_addrlen, void* this__);
 		void OnNewConn(int fd, struct sockaddr* client_addr, int client_addrlen);
 

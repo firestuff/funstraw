@@ -218,6 +218,9 @@ void CryptoPubConnBase::OnReadable() {
 CryptoPubServer::CryptoPubServer(const std::string& secret_key)
 	: secret_key_(secret_key),
 	  event_base_(event_base_new()) {
+	auto signal_event = evsignal_new(event_base_, SIGINT, &CryptoPubServer::Shutdown_, this);
+	event_add(signal_event, NULL);
+
 	assert(secret_key_.length() == crypto_box_SECRETKEYBYTES);
 
 	struct sockaddr_in6 server_addr = {0};
@@ -256,6 +259,15 @@ void CryptoPubServer::OnNewConn(int client_fd, struct sockaddr* client_addr_, in
 
 void CryptoPubServer::Loop() {
 	event_base_dispatch(event_base_);
+}
+
+void CryptoPubServer::Shutdown_(evutil_socket_t sig, short events, void *this__) {
+	auto this_ = (CryptoPubServer*)this__;
+	this_->Shutdown();
+}
+
+void CryptoPubServer::Shutdown() {
+	event_base_loopexit(event_base_, NULL);
 }
 
 

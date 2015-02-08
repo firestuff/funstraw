@@ -1,5 +1,7 @@
 #include <getopt.h>
 
+#include <iostream>
+
 #include "crypto.h"
 
 static const struct option long_options[] = {
@@ -24,4 +26,6 @@ int main(int argc, char *argv[]) {
 
 	CryptoPubServer server(secret_key);
 	server.Loop();
+
+	std::cerr << "Shutting down" << std::endl;
 }

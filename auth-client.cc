@@ -1,6 +1,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 
+#include <iostream>
+
 #include "crypto.h"
 
 static const struct option long_options[] = {
@@ -52,4 +54,6 @@ int main(int argc, char *argv[]) {
 
 	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key, channel_bitrates);
 	client->Loop();
+
+	std::cerr << "Shutting down" << std::endl;
 }
