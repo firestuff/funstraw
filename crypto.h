@@ -15,6 +15,7 @@ class CryptoKey {
 		void WriteToFile(const std::string& filename) const;
 
 		const unsigned char* Key() const;
+		bool IsSet() const;
 
 		unsigned char* MutableKey();
 		void MarkSet();
@@ -67,7 +68,12 @@ class CryptoPubConnBase : public CryptoBase {
 		void LogFatal(const std::string& msg, void *obj=nullptr);
 
 		std::unique_ptr<TLVNode> BuildSecureHandshake();
+		std::unique_ptr<TLVNode> BuildHandshake();
+		void SendHandshake();
+
 		bool HandleSecureHandshake(const TLVNode& node);
+		bool HandleHandshake(const TLVNode& node);
+
 		void EncryptSend(const TLVNode& node);
 
 		static void OnReadable_(struct bufferevent* bev, void* this__);
@@ -123,8 +129,6 @@ class CryptoPubServerConnection : public CryptoPubConnBase {
 		static void OnError_(struct bufferevent* bev, const short what, void* this__);
 		void OnError(const short what);
 
-		void SendHandshake();
-
 		friend CryptoPubServer;
 };
 
@@ -145,7 +149,6 @@ class CryptoPubClient : public CryptoPubConnBase {
 		void OnConnect();
 		void OnError();
 
-		void SendHandshake();
 		void SendTunnelRequest();
 
 		struct event_base* event_base_;
