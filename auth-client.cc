@@ -46,6 +46,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	sodium_init();
+
 	SecretKey secret_key;
 	secret_key.ReadFromFile(secret_key_filename);
 

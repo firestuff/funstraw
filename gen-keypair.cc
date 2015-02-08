@@ -10,6 +10,8 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	sodium_init();
+
 	SecretKey secret_key;
 	PublicKey public_key;
 	CryptoUtil::GenKeyPair(&secret_key, &public_key);

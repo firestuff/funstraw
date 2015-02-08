@@ -10,6 +10,8 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	sodium_init();
+
 	SharedKey key;
 	CryptoUtil::GenKey(&key);
 
