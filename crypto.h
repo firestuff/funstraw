@@ -105,6 +105,7 @@ class CryptoPubServer : public CryptoBase {
 
 		struct event_base* event_base_;
 		struct evconnlistener* listener_;
+		struct event* sigevent_;
 
 		const SecretKey& secret_key_;
 };

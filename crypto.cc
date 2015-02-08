@@ -272,8 +272,8 @@ void CryptoPubConnBase::OnReadable() {
 CryptoPubServer::CryptoPubServer(const SecretKey& secret_key)
 	: secret_key_(secret_key),
 	  event_base_(event_base_new()) {
-	auto signal_event = evsignal_new(event_base_, SIGINT, &CryptoPubServer::Shutdown_, this);
-	event_add(signal_event, NULL);
+	sigevent_ = evsignal_new(event_base_, SIGINT, &CryptoPubServer::Shutdown_, this);
+	event_add(sigevent_, NULL);
 
 	struct sockaddr_in6 server_addr = {0};
 	server_addr.sin6_family = AF_INET6;
@@ -284,6 +284,7 @@ CryptoPubServer::CryptoPubServer(const SecretKey& secret_key)
 }
 
 CryptoPubServer::~CryptoPubServer() {
+	event_free(sigevent_);
 	evconnlistener_free(listener_);
 	event_base_free(event_base_);
 }
