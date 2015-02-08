@@ -184,7 +184,9 @@ std::ostream& CryptoBase::Log(void *obj) {
 
 CryptoPubConnBase::CryptoPubConnBase(const SecretKey& secret_key)
 	: secret_key_(secret_key),
-	  state_(AWAITING_HANDSHAKE) {}
+	  state_(AWAITING_HANDSHAKE) {
+	CryptoUtil::DerivePublicKey(secret_key_, &public_key_);
+}
 
 CryptoPubConnBase::~CryptoPubConnBase() {
 	bufferevent_free(bev_);
@@ -209,9 +211,7 @@ std::unique_ptr<TLVNode> CryptoPubConnBase::BuildHandshake() {
 	auto secure_handshake = BuildSecureHandshake();
 
 	std::unique_ptr<TLVNode> handshake(new TLVNode(TLV_TYPE_HANDSHAKE));
-	PublicKey public_key;
-	CryptoUtil::DerivePublicKey(secret_key_, &public_key);
-	handshake->AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, public_key.AsString()));
+	handshake->AppendChild(new TLVNode(TLV_TYPE_PUBLIC_KEY, public_key_.AsString()));
 	handshake->AppendChild(secure_handshake.release());
 
 	return handshake;

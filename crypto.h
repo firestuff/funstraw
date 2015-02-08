@@ -89,7 +89,9 @@ class CryptoPubConnBase : public CryptoBase {
 		struct bufferevent* bev_;
 
 		const SecretKey& secret_key_;
+		PublicKey public_key_;
 		PublicKey peer_public_key_;
+
 		SecretKey ephemeral_secret_key_;
 		PublicKey peer_ephemeral_public_key_;
 };
