@@ -20,8 +20,10 @@ class CryptoKey {
 		unsigned char* MutableKey();
 		void MarkSet();
 
+		void Clear();
+
 	protected:
-		unsigned char* const key_;
+		unsigned char* key_;
 		bool is_set_;
 		const size_t key_bytes_;
 };
@@ -45,14 +47,20 @@ class PublicKey : public CryptoKey {
 		void FromString(const std::string& str);
 };
 
+class PrecalcKey : public CryptoKey {
+	public:
+		PrecalcKey();
+};
+
 class CryptoUtil {
 	public:
 		static void GenKey(SharedKey* key);
 		static void GenKeyPair(SecretKey* secret_key, PublicKey* public_key);
 		static void DerivePublicKey(const SecretKey& secret_key, PublicKey* public_key);
+		static void PrecalculateKey(const SecretKey& secret_key, const PublicKey& public_key, PrecalcKey* precalc_key);
 
-		static std::unique_ptr<TLVNode> EncodeEncrypt(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input);
-		static std::unique_ptr<TLVNode> DecryptDecode(const SecretKey& secret_key, const PublicKey& public_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> EncodeEncrypt(const PrecalcKey& precalc_key, const TLVNode& input);
+		static std::unique_ptr<TLVNode> DecryptDecode(const PrecalcKey& precalc_key, const TLVNode& input);
 };
 
 class CryptoBase {
@@ -91,9 +99,11 @@ class CryptoPubConnBase : public CryptoBase {
 		const SecretKey& secret_key_;
 		PublicKey public_key_;
 		PublicKey peer_public_key_;
+		PrecalcKey precalc_key_;
 
 		SecretKey ephemeral_secret_key_;
 		PublicKey peer_ephemeral_public_key_;
+		PrecalcKey ephemeral_precalc_key_;
 };
 
 class CryptoPubServerConnection;
