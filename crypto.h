@@ -146,10 +146,10 @@ class CryptoPubServerConnection : public CryptoPubConnBase {
 
 class CryptoPubClient : public CryptoPubConnBase {
 	public:
-		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates);
+		CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key);
 		~CryptoPubClient();
 
-		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates);
+		static CryptoPubClient* FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key);
 
 		void Loop();
 
@@ -164,6 +164,4 @@ class CryptoPubClient : public CryptoPubConnBase {
 		void SendTunnelRequest();
 
 		struct event_base* event_base_;
-
-		const std::list<uint32_t> channel_bitrates_;
 };

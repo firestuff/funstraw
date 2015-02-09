@@ -24,13 +24,16 @@
 #define TLV_TYPE_ENCRYPTED_BLOB          0x0000
 #define TLV_TYPE_NONCE                   0x0001
 #define TLV_TYPE_PUBLIC_KEY              0x0002
-#define TLV_TYPE_DOWNSTREAM_BITRATE      0x0003
+#define TLV_TYPE_OPAQUE                  0x0003
+#define TLV_TYPE_DOWNSTREAM_BITRATE      0x0004
 
 #define TLV_TYPE_ENCRYPTED               0x8000
 #define TLV_TYPE_HANDSHAKE               0x8001
 #define TLV_TYPE_HANDSHAKE_SECURE        0x8002
-#define TLV_TYPE_TUNNEL_REQUEST          0x8003
-#define TLV_TYPE_CHANNEL                 0x8004
+#define TLV_TYPE_PING                    0x8003
+#define TLV_TYPE_PONG                    0x8004
+#define TLV_TYPE_TUNNEL_REQUEST          0x8005
+#define TLV_TYPE_CHANNEL                 0x8006
 
 
 void CryptoUtil::GenKey(SharedKey* key) {
@@ -465,10 +468,9 @@ void CryptoPubServerConnection::OnError(const short what) {
 }
 
 
-CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates)
+CryptoPubClient::CryptoPubClient(struct sockaddr* addr, socklen_t addrlen, const SecretKey& secret_key, const PublicKey& server_public_key)
 	: CryptoPubConnBase(secret_key),
-	  event_base_(event_base_new()),
-		channel_bitrates_(channel_bitrates) {
+	  event_base_(event_base_new()) {
 	bev_ = bufferevent_socket_new(event_base_, -1, BEV_OPT_CLOSE_ON_FREE);
 	peer_public_key_.FromString(server_public_key.AsString());
 	CryptoUtil::PrecalculateKey(secret_key_, peer_public_key_, &precalc_key_);
@@ -483,14 +485,14 @@ CryptoPubClient::~CryptoPubClient() {
 	event_base_free(event_base_);
 }
 
-CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key, const std::list<uint32_t>& channel_bitrates) {
+CryptoPubClient* CryptoPubClient::FromHostname(const std::string& server_address, const std::string& server_port, const SecretKey& secret_key, const PublicKey& server_public_key) {
 	struct addrinfo* res;
 	int gai_ret = getaddrinfo(server_address.c_str(), server_port.c_str(), NULL, &res);
 	if (gai_ret) {
 		std::cerr << "Failed to resolve server_address: " << gai_strerror(gai_ret) << std::endl;
 		return nullptr;
 	}
-	auto ret = new CryptoPubClient((struct sockaddr*)res->ai_addr, res->ai_addrlen, secret_key, server_public_key, channel_bitrates);
+	auto ret = new CryptoPubClient((struct sockaddr*)res->ai_addr, res->ai_addrlen, secret_key, server_public_key);
 	freeaddrinfo(res);
 	return ret;
 }
@@ -502,8 +504,6 @@ void CryptoPubClient::OnHandshake(const TLVNode& decoded) {
 
 	this->state_ = READY;
 	Log() << "Handshake successful" << std::endl;
-
-	SendTunnelRequest();
 }
 
 bool CryptoPubClient::OnMessage(const TLVNode& message) {
@@ -525,17 +525,6 @@ void CryptoPubClient::OnConnectOrError_(struct bufferevent* bev, const short wha
 void CryptoPubClient::OnConnect() {
 	Log() << "Connected to server" << std::endl;
 	SendHandshake();
-}
-
-void CryptoPubClient::SendTunnelRequest() {
-	TLVNode tunnel_request(TLV_TYPE_TUNNEL_REQUEST);
-	for (auto channel_bitrate : channel_bitrates_) {
-		auto channel = new TLVNode(TLV_TYPE_CHANNEL);
-		channel_bitrate = htonl(channel_bitrate);
-		channel->AppendChild(new TLVNode(TLV_TYPE_DOWNSTREAM_BITRATE, std::string((char*)&channel_bitrate, sizeof(channel_bitrate))));
-		tunnel_request.AppendChild(channel);
-	}
-	EncryptSend(tunnel_request);
 }
 
 void CryptoPubClient::OnError() {

@@ -10,7 +10,6 @@ static const struct option long_options[] = {
 	{"server_public_key_filename", required_argument, NULL, 'r'},
 	{"server_address", required_argument, NULL, 'a'},
 	{"server_port", required_argument, NULL, 't'},
-	{"channel_bitrate", required_argument, NULL, 'b'},
 };
 
 int main(int argc, char *argv[]) {
@@ -19,7 +18,6 @@ int main(int argc, char *argv[]) {
 	std::string server_public_key_filename;
 	std::string server_address;
 	std::string server_port;
-	std::list<uint32_t> channel_bitrates;
 	{
 		int option, option_index;
 		while ((option = getopt_long(argc, argv, "s:", long_options, &option_index)) != -1) {
@@ -39,9 +37,6 @@ int main(int argc, char *argv[]) {
 				case 't':
 					server_port = optarg;
 					break;
-				case 'b':
-					channel_bitrates.push_back(strtoul(optarg, NULL, 10));
-					break;
 			}
 		}
 	}
@@ -54,7 +49,7 @@ int main(int argc, char *argv[]) {
 	PublicKey server_public_key;
 	server_public_key.ReadFromFile(server_public_key_filename);
 
-	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key, channel_bitrates);
+	auto client = CryptoPubClient::FromHostname(server_address, server_port, secret_key, server_public_key);
 	client->Loop();
 
 	std::cerr << "Shutting down" << std::endl;
