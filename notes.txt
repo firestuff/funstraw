@@ -1,0 +1,31 @@
+priority buckets:
+  std::array [ differentiated service ]
+fairness buckets:
+  intrusive unordered set [ source address ]
+  intrusive unordered set [ dest address ]
+  intrusive unordered set [ protocol, port pair ]
+per-bucket queue:
+  intrusive doubly linked list
+global size queue (for binpacking):
+  intrusive multiset [ packet size ]
+
+siphash for unordered sets
+
+pop algorithm:
+  find first non-empty priority
+  keep iterator to 3 tiers of next bucket in rotation
+  pop first N from bucket queue until picking next packet would exceed size limit
+  use global size queue find packets with size <= remaining space; largest-first binpacking
+
+
+HonestQueue
+  std::array[ differentiated service ] -> PriorityBucket
+    intrusive unordered set [ source address ] -> FairSrcBucket
+      intrusive unordered set [ dest address ] -> FairDestBucket
+        intrusive unordered set [ protocol, port pair ] -> FairFlowBucket
+          intrusive double-linked list -> Packet
+    statistics
+
+  intrusive multiset [ packet size ] -> Packet
+
+  statistics
