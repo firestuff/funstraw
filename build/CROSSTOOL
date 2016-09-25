@@ -1,0 +1,66 @@
+major_version: "local"
+minor_version: ""
+default_target_cpu: "same_as_host"
+
+default_toolchain {
+  cpu: "k8"
+  toolchain_identifier: "local_linux"
+}
+
+toolchain {
+  abi_version: "local"
+  abi_libc_version: "local"
+  builtin_sysroot: ""
+  compiler: "compiler"
+  host_system_name: "local"
+  needsPic: true
+  supports_gold_linker: false
+  supports_incremental_linker: false
+  supports_fission: false
+  supports_interface_shared_objects: false
+  supports_normalizing_ar: false
+  supports_start_end_lib: false
+  supports_thin_archives: false
+  target_libc: "local"
+  target_cpu: "local"
+  target_system_name: "local"
+  toolchain_identifier: "local_linux"
+
+  tool_path { name: "ar" path: "/usr/bin/llvm-ar-3.8" }
+  tool_path { name: "compat-ld" path: "/usr/bin/llvm-link-3.8" }
+  tool_path { name: "cpp" path: "/usr/bin/clang-3.8" }
+  tool_path { name: "dwp" path: "/usr/bin/llvm-dwp-3.8" }
+  tool_path { name: "gcc" path: "/usr/bin/clang-3.8" }
+  tool_path { name: "gcov" path: "/usr/bin/gcov" }
+  tool_path { name: "ld" path: "/usr/bin/llvm-link-3.8" }
+  tool_path { name: "nm" path: "/usr/bin/nm" }
+  tool_path { name: "objcopy" path: "/usr/bin/objcopy" }
+  tool_path { name: "objdump" path: "/usr/bin/objdump" }
+  tool_path { name: "strip" path: "/usr/bin/strip" }
+
+  cxx_flag: "-std=c++1z"
+
+  cxx_builtin_include_directory: "/usr/lib/llvm-3.8/lib/clang/3.8.1/include"
+  cxx_builtin_include_directory: "/usr/include"
+
+  objcopy_embed_flag: "-I"
+  objcopy_embed_flag: "binary"
+
+  # Enable SSE/AVX. Note that any binaries built will require a machine
+  # that supports at least AVX2 to execute.
+  compiler_flag: "-mtune=skylake-avx512"
+
+  compiler_flag: "-D_FORTIFY_SOURCE=2"
+  compiler_flag: "-fstack-protector"
+  compiler_flag: "-fPIE"
+  linker_flag: "-Wl,-z,relro,-z,now"
+  linker_flag: "-pie"
+
+  compilation_mode_flags {
+    mode: OPT
+    compiler_flag: "-g"
+    compiler_flag: "-O3"
+  }
+
+  linking_mode_flags { mode: FULLY_STATIC }
+}
