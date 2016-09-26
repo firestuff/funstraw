@@ -1,3 +1,5 @@
+package(default_visibility = ["//visibility:public"])
+
 cc_library(
   name = "tun_tap_device_lib",
   hdrs = [

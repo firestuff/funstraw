@@ -55,6 +55,7 @@ toolchain {
   compiler_flag: "-fPIE"
   linker_flag: "-Wl,-z,relro,-z,now"
   linker_flag: "-pie"
+  linker_flag: "-lstdc++"
 
   compilation_mode_flags {
     mode: OPT
